@@ -18,6 +18,7 @@ verbose_debug = False
 custom_quadtree = False
 notification_fields  = ["status", "warning_level", "latitude", "longitude", "description", "address"] #people get updated when these fields change
 push_user_notifications = True
+print_user_notifications = True
 
 #-------------------------------info-----------------------------------------
 
@@ -121,6 +122,8 @@ def update_database_incidents(incidents):
         #nearby_incident_data is { person_id : [list of incidents] }
         if push_user_notifications:
             push_data = create_user_notification_data(nearby_incident_data, current_incident_updates)
+            people_with_updates_count =  people_with_updates_count = sum(bool(incidents) for incidents in push_data.values())
+            print(f"{people_with_updates_count} out of {len(db.get_all_rows(session, models.People))} people have incident updates")
             notify_users(session, push_data)
 
         
@@ -247,7 +250,7 @@ def create_user_notification_data(people_to_incident_data, incident_updates):
     result = {}
     for person_id, incident_list in people_to_incident_data.items():
         push_ids = set(incident_list) & set(updated_incident_ids)
-        result[person_id] = push_ids
+        result[person_id] = list(push_ids)
     return result
 
 #make sure this function isn't called before the archived incidents are deleted from current_incidents
@@ -279,10 +282,14 @@ def notify_user(session, person_id, incident_ids, from_rows):
     #now extract only the rows we need and send messages
     message_rows = [row for row in from_rows if row.id in incident_ids]
     sent_messages = 0
+    global print_user_notifications
     for row in message_rows:
         try:
             data = row_to_firebase_data(row)
-            send_firebase_notification(row.event_type, create_message_from_incident(row), fcm_token, data)
+            message = create_message_from_incident(row)
+            send_firebase_notification("New Incident Update", message, fcm_token, data)
+            if print_user_notifications:
+                print(f"Notification to user: {message}")
             sent_messages += 1 
         except Exception as e:
             print(f"Failed to send notification: {e}")
@@ -291,6 +298,13 @@ def notify_user(session, person_id, incident_ids, from_rows):
 def row_to_firebase_data(row):
     return {column.name: str(getattr(row, column.name) or "") for column in row.__table__.columns}
 
-#TODO: this
-def create_message_from_incident():
+def create_message_from_incident(row):
+    message = f"There is a {row.event_type} near you with status '{row.status}' and warning level '{row.warning_level}. "
+
+    #these fields from dataquoll can be blank  >:(
+    if row.description is not None:
+        message = message + row.description
+    if row.address is not None:
+        message = message + row.address
+    
     return "message"
