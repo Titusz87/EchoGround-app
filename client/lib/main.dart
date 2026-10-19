@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:maplibre_gl/maplibre_gl.dart';
+import 'screens/guest_mode/guest_mode_dashboard.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,33 +18,8 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: Scaffold(
-      body: MapLibreMap(
-        initialCameraPosition: const CameraPosition(
-          target: LatLng(-25.2744, 133.7751),
-          zoom: 2.5,
-        ),
-        styleString: 'https://tiles.openfreemap.org/styles/dark',
-      ),
-        appBar: AppBar(
-          title: const Text('CountryReady.ai'),
-          centerTitle: true,
-        ),
-        bottomNavigationBar: NavigationBar(destinations: [
-          NavigationDestination(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.warning),
-            label: 'Incidents',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],)
-      ),
+      // Every user in Guest mode by default
+      home: const GuestModeDashboard(),
     );
   }
 }
