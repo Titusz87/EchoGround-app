@@ -1,6 +1,6 @@
 TIBOR
 
-- fix admin and user ui bugs; no map view, and profile icon doesnt work after logging in
+
 - add local sqlight db
 
 
