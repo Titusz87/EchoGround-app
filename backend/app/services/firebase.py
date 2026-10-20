@@ -1,7 +1,9 @@
 import os
 import firebase_admin
-from firebase_admin import credentials
-from firebase_admin import messaging
+from firebase_admin import credentials, messaging, app_check
+from fastapi import Header, HTTPException
+from firebase_admin.exceptions import FirebaseError
+import jwt
 
 #only initialise firebase once for push notifications 
 def initialise_firebase():
@@ -45,5 +47,36 @@ def send_firebase_notification(_title, _body, _token, _data):
     response = messaging.send(message)
     return response
 
+#verify firebase app check tokens to be authentic. so the user can't register with a fake fcm token
+def verify_app_check(
+    token: str | None = Header(
+        default=None,
+        alias="X-Firebase-AppCheck",
+    ),
+):
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing App Check token",
+        )
+    try:
+        firebase_app = firebase_admin.get_app()
+        return app_check.verify_token(token, app=firebase_app) #retrieve the default app with firebase_admin.get_app()
+    except ValueError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid App Check token",
+        )
+    except jwt.exceptions.PyJWKClientError:
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to verify App Check token",
+        )
+    except FirebaseError:
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to verify App Check token",
+        )
+        
 
 

@@ -42,7 +42,3 @@ def translate_incident_objects_to_table_objects(incidents):
         translated.append(current_incident)
     return translated
 
-#use this code to delete rows (not the table itself)
-# with get_session() as session:
-#     session.execute(delete(models.Current_Incident))
-#     session.commit() 

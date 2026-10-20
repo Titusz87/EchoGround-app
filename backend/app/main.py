@@ -18,10 +18,10 @@ auto_poll = False
 poll_on_startup = True
 auto_poll_interval = 2
 test_firebase_notification_system = False
-flush_db_models = [models.People, models.People_Incident]
+flush_db_models = []
 create_db_people = 100
 
-#------------------------------------------------------------------
+#-----------------------------------------------------
 
 #this code runs when the server is created 
 #'asynccontextmanager' decorator makes 'lifespan' fn work as a context manager  
@@ -29,7 +29,8 @@ create_db_people = 100
 async def lifespan(app: FastAPI):
     #one time setup stuff runs here 
     load_dotenv(".env")
-    initialise_firebase()
+    firebase_app = initialise_firebase()
+    app.state.firebase_app = firebase_app
     connect_to_db()
     setup_polling()
     do_additional_db_jobs()
@@ -60,7 +61,7 @@ def do_additional_db_jobs():
     with get_session() as session:
 
         #options to flush tables
-        if not flush_db_models:
+        if flush_db_models:
             for model in flush_db_models:
                 db.flush_db_table(session, model)
                 db.print_table_info(session, model)

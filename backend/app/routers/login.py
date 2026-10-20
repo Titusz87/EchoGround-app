@@ -1,0 +1,37 @@
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+#-----------------------------------------
+
+router = APIRouter()
+
+#-----------------------------------------------
+
+#receive the users id and fcm token to verify their location update
+class LocationUpdateRequest(BaseModel):
+    latitude: float
+    longitude: float
+    id: int
+    fcm_token: str
+
+#------------------------------------------------------------
+
+#TODO log in to user
+
+
+
+
+#TODO log into admin 
+
+#---------------------------------------------------------------
+
+#TODO the POST that sends location when the app refreshes 
+@router.post("/update-location")
+def update_location(data: LocationUpdateRequest):
+    #TODO: retrieve user from people table, rewrite their location data
+
+
+    return {
+        "status": "ok",
+        "message": "Location updated successfully",
+    }
