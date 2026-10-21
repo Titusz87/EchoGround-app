@@ -4,7 +4,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -62,7 +62,7 @@ app = FastAPI(
 # Explicitly bind middleware directly onto the app container instance
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://github.io", "http://localhost"], # Trust your GitHub Pages production domain and local workspace
+    allow_origins=["https://titusz87.github.io", "http://localhost"], # Trust your GitHub Pages production domain and local workspace
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"], # Explicitly declare permitted preflight methods
     allow_headers=["*"],
@@ -70,13 +70,19 @@ app.add_middleware(
     max_age=600, # Cache preflight responses for 10 minutes to reduce network overhead
 )
 
-# Add your sub-routers AFTER the global middleware wrapper is fully locked in
+# ---- GLOBAL PREFLIGHT INTERCEPTOR ----
+# Catch browser OPTIONS requests globally before they hit sub-router validation dependencies
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(request_response: Response):
+    return request_response
+
+# Add your sub-routers AFTER the interceptor handler is established
 app.include_router(registration_router)
 
 #the root of the API
 @app.get("/")
 def root():
-    return {"message": "Hello from EchoGround!"}
+    return {"message": "Hello from CountryReady!"}
 
 #can do database stuff here
 def do_additional_db_jobs():
@@ -94,7 +100,6 @@ def do_additional_db_jobs():
 
         session.commit()
 
-# FIXED: Reestablished correct function tracking label
 def do_additional_firebase_jobs():
     if test_firebase_notification_system:
         firebase_test_notification()
