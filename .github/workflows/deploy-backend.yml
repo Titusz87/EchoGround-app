@@ -31,4 +31,5 @@ jobs:
           FASTAPI_CLOUD_APP_ID: ${{ secrets.FASTAPI_CLOUD_APP_ID }}
         run: |
           cd backend
-          uv run fastapi deploy --token "$FASTAPI_CLOUD_TOKEN" --app-id "$FASTAPI_CLOUD_APP_ID"
+          
+          uv run fastapi deploy
