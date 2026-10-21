@@ -4,12 +4,12 @@ importScripts("https://gstatic.com");
 
 // Initialize Firebase configuration natively for the web browser context
 firebase.initializeApp({
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_://firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_://appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCEHGEaPKdVvy5ztmxJRQOeX08FOtBU1Hc",
+  authDomain: "country-ready.firebaseapp.com",
+  projectId: "country-ready",
+  storageBucket: "country-ready.firebasestorage.app",
+  messagingSenderId: "254583394013",
+  appId: "1:254583394013:web:bc071bd0dc394a2b07d534"
 });
 
 const messaging = firebase.messaging();
