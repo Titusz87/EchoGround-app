@@ -1,5 +1,11 @@
+import sys
+import os
+# Inject path setter to guarantee relative cloud container module paths resolve cleanly
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.services.poll_dataquoll import poll_all_states, setup_polling
@@ -46,15 +52,31 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown()
 
-#fastAPI runs with 'lifespan' fn. add routers
-app = FastAPI(lifespan=lifespan)
+# ---- FIX: Initialize FastAPI with explicit global CORS configurations directly ----
+app = FastAPI(
+    lifespan=lifespan,
+    openapi_url="/openapi.json",
+    docs_url="/docs"
+)
+
+# Explicitly bind middleware directly onto the app container instance
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://titusz87.github.io", "http://localhost"], # Explicitly trust your GitHub Pages production domain
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"], # Explicitly declare permitted preflight verbiage 
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600, # Cache preflight responses for 10 minutes to make the app incredibly fast
+)
+
+# Add your sub-routers AFTER the global middleware wrapper is fully locked in
 app.include_router(registration_router)
-#app.include_router(something_else_router)
 
 #the root of the API
 @app.get("/")
 def root():
-    return {"message": "Hello from CountryReady!"}
+    return {"message": "Hello from EchoGround!"}
 
 #can do database stuff here
 def do_additional_db_jobs():
@@ -70,9 +92,8 @@ def do_additional_db_jobs():
         if create_db_people > 0:
             create_random_people(create_db_people)
 
-        
         session.commit()
 
-def do_additional_firebase_jobs():
+def do_additional_db_jobs():
     if test_firebase_notification_system:
         firebase_test_notification()
