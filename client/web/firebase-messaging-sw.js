@@ -1,6 +1,6 @@
 // client/web/firebase-messaging-sw.js
-importScripts("https://gstatic.com");
-importScripts("https://gstatic.com");
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
 
 // Initialize Firebase configuration natively for the web browser context
 firebase.initializeApp({
@@ -21,9 +21,9 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.data.title || "Incident Alert";
   const notificationOptions = {
     body: payload.data.body || "A local dataset has been updated.",
-    icon: "/icons/Icon-192.png", 
+    icon: "/EchoGround-app/icons/Icon-192.png", 
     data: {
-      url: payload.data.link || "/" 
+      url: payload.data.link || "/EchoGround-app/" 
     }
   };
 
