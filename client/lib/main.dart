@@ -1,12 +1,31 @@
+// client/lib/main.dart
 import 'package:flutter/material.dart';
+import 'services/notification_service.dart';
 import 'screens/guest_mode/guest_mode_dashboard.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // 1. Initialize modular Firebase settings via our custom helper service layer
+  await NotificationService.initFirebase();
+
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // 2. Fire off the automated location tracking loops using our clean service wrapper
+    NotificationService.setupPushNotifications(context);
+  }
 
   @override
   Widget build(BuildContext context) {

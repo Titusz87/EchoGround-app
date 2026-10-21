@@ -37,6 +37,10 @@ dependencies:
   maplibre_gl: ^0.27.1
   sqflite: ^2.4.4
   path: ^1.9.1
+  firebase_core: ^5.0.0
+  firebase_messaging: ^17.0.0
+  http: ^1.6.0
+  geolocator: ^14.1.2
 
 dev_dependencies:
   flutter_test:
