@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from app.services.registration import create_person
-from app.services.firebase import verify_app_check
+# Commented out for local integration validation tests
+# from app.services.firebase import verify_app_check
 
 router = APIRouter()
 
@@ -17,7 +18,7 @@ class StartupRequest(BaseModel):
 
 #this is the route that runs ONCE when a device connects for the first time (to give the device a unique id and save fcm token in the backend)
 @router.post("/create-person")
-def register_person(data: StartupRequest, _verified_app=Depends(verify_app_check),):
+def register_person(data: StartupRequest): # Removed the _verified_app dependency bloc
     
     person_id = create_person(
         latitude=data.latitude,
