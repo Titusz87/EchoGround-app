@@ -4,6 +4,7 @@ from sqlalchemy.orm import mapped_column
 from datetime import datetime 
 from sqlalchemy import DateTime
 from sqlalchemy import Integer, ForeignKey, String
+from sqlalchemy.dialects.postgresql import ARRAY
 
 #--------------table classes (define how to read and write objects to db)------------------------------
 
@@ -78,7 +79,7 @@ class Community_Profile(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
 #we need to remember which incidents affect which people
-class Affected_Households(Base):
-    __tablename__ = "affected_households"
-    id: Mapped[int] = mapped_column(primary_key=True) #this is the same as the primary key for households
-    incidents: Mapped[str]                            #this string can store the id's of incidents
+class People_Incident(Base):
+    __tablename__ = "people_incidents"
+    id: Mapped[int] = mapped_column(ForeignKey("people.id"),primary_key=True)           #this is the same as the primary key for people
+    incident_ids: Mapped[list[str]] = mapped_column(ARRAY(String),default=list)         #this string can store the id's of incidents

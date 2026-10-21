@@ -2,6 +2,9 @@ from sqlalchemy import delete
 from sqlalchemy import select
 from app.database import get_session
 
+
+#-------config-------------------------------------
+
 verbose_debug = False
 
 
@@ -104,4 +107,12 @@ def print_table_info(session, model):
         print(f"Size of {model.__tablename__} table: {len(current_incidents)}")
     except Exception as e:
         print(f"Failed to get table info: {e}")    
+
+#retrieve a value
+def get_value_by_id(session, model, row_id, column):
+    row = session.get(model, row_id)
+    if row is None:
+        print(f"Could not retrieve value in {column} by id from {model.__tablename__}")
+        return None
+    return getattr(row, column)
 

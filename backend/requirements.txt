@@ -6,3 +6,4 @@ python-dotenv      #use .env files
 SQLAlchemy         #database ORM
 psycopg[binary]    #PostgreSQL driver 
 firebase-admin     #for push notifications 
+geopy              #latitude, longitude and geodesic calculations

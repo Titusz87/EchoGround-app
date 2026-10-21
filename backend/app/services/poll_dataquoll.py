@@ -5,17 +5,18 @@ from datetime import datetime
 from app.services.incident_sync import update_database_incidents
 
 #-------vars------------------------------------------------
-states = ["nsw", "vic", "qld", "wa", "sa", "tas", "act", "nt"]
 
 event_types = set()
 statuses = set()
 warning_levels = set()
 unset_values = set()
-
 API_KEY = None 
+
+#--------------config------------------------------------
+
 verbose_debug = False
 write_to_db = True
-
+poll_states = ["nsw", "vic", "qld", "wa", "sa", "tas", "act", "nt"]
 
 #-------classes------------------------------------------------
 class Incident:
@@ -76,7 +77,7 @@ def setup_polling():
 async def poll_all_states():
     incidents = []
     print("Polling...")
-    for s in states:
+    for s in poll_states:
         if verbose_debug:
             print(f"Polling state: {s}")
         
@@ -87,7 +88,7 @@ async def poll_all_states():
         
         for i in state_incidents:
             incidents.append(i)
-    print(f"Polled {len(incidents)} incidents from states: {states}")
+    print(f"Polled {len(incidents)} incidents from states: {poll_states}")
 
     #get more info about dataquoll data if we want 
     if verbose_debug:
