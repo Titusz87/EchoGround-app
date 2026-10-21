@@ -129,7 +129,16 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        // Explicitly scoping the registration path to fix GitHub Pages repository directory
+        navigator.serviceWorker.register('/EchoGround-app/firebase-messaging-sw.js', {
+          scope: '/EchoGround-app/'
+        })
+        .then(function(reg) {
+          console.log('Firebase Service Worker successfully registered with scope: ', reg.scope);
+        })
+        .catch(function(err) {
+          console.error('Service Worker registration failed: ', err);
+        });
       });
     }
   </script>
