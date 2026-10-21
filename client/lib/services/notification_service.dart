@@ -1,4 +1,5 @@
 // client/lib/services/notification_service.dart
+// client/lib/services/notification_service.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -8,12 +9,13 @@ import 'package:http/http.dart' as http;
 
 class NotificationService {
   static Future<void> initFirebase() async {
+    // Looks for variables injected at compile time by the build engine
     await Firebase.initializeApp(
       options: const FirebaseOptions(
-        apiKey: "YOUR_API_KEY",
-        appId: "YOUR_APP_ID",
-        messagingSenderId: "YOUR_SENDER_ID",
-        projectId: "YOUR_PROJECT_ID",
+        apiKey: String.fromEnvironment('FIREBASE_API_KEY'),
+        appId: String.fromEnvironment('FIREBASE_APP_ID'),
+        messagingSenderId: String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID'),
+        projectId: String.fromEnvironment('FIREBASE_PROJECT_ID'),
       ),
     );
   }
@@ -42,7 +44,6 @@ class NotificationService {
         
         if (permission == LocationPermission.deniedForever) return;
 
-        // UPDATED: Modern geolocation positional tracking using LocationSettings wrapper
         Position position = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.high,
@@ -60,8 +61,9 @@ class NotificationService {
     });
 
     try {
+      // Looks for your VAPID key injected at compile time
       await messaging.register(
-        vapidKey: "YOUR_PUBLIC_VAPID_KEY_FROM_FIREBASE_CONSOLE",
+        vapidKey: const String.fromEnvironment('FIREBASE_VAPID_KEY'),
       );
     } catch (e) {
       print('Error during FCM web manual registration handshake step: $e');
