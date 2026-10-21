@@ -19,7 +19,7 @@ poll_on_startup = True
 auto_poll_interval = 2
 test_firebase_notification_system = False
 flush_db_models = []
-create_db_people = 100
+create_db_people = 0
 
 #-----------------------------------------------------
 
