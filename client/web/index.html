@@ -125,7 +125,22 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+  if ('serviceWorker' in navigator) {
+    const originalRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    navigator.serviceWorker.register = (url, options) => {
+      if (String(url).includes('firebase-messaging-sw.js')) {
+        return originalRegister('/EchoGround-app/firebase-messaging-sw.js', {
+          scope: '/EchoGround-app/firebase-cloud-messaging-push-scope'
+        });
+      }
+      return originalRegister(url, options);
+    };
+  }
+  </script>
   <script src="flutter_bootstrap.js" async=""></script>
+
+
 
 
 </body></html>
