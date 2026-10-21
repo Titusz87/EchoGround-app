@@ -4,12 +4,12 @@ importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-com
 
 // Initialize Firebase configuration natively for the web browser context
 firebase.initializeApp({
-  apiKey: "AIzaSyCEHGEaPKdVvy5ztmxJRQOeX08FOtBU1Hc",
-  authDomain: "country-ready.firebaseapp.com",
-  projectId: "country-ready",
-  storageBucket: "country-ready.firebasestorage.app",
-  messagingSenderId: "254583394013",
-  appId: "1:254583394013:web:bc071bd0dc394a2b07d534"
+  apiKey: "AIzaSyBUy-D-5hh5u7G6ecgzr333R4wdhlK-Lxk",
+  authDomain: "echoground-9f92d.firebaseapp.com",
+  projectId: "echoground-9f92d",
+  storageBucket: "echoground-9f92d.firebasestorage.app",
+  messagingSenderId: "600189671041",
+  appId: "1:600189671041:web:5cacabe5a91205faaa5f80"
 });
 
 const messaging = firebase.messaging();

@@ -1,9 +1,9 @@
-fastapi            #backend
-uvicorn[standard]  #server gateway interface 
-httpx              #let python make http requests       
-apscheduler        #handle scheduling 
-python-dotenv      #use .env files 
-SQLAlchemy         #database ORM
-psycopg[binary]    #PostgreSQL driver 
-firebase-admin     #for push notifications 
-geopy              #latitude, longitude and geodesic calculations
+fastapi[standard]==0.115.2
+uvicorn==0.32.0
+httpx
+apscheduler
+python-dotenv
+SQLAlchemy
+psycopg[binary]
+firebase-admin
+geopy
