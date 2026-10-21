@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown()
 
-# ---- FIX: Initialize FastAPI with explicit global CORS configurations directly ----
+# Initialize FastAPI with explicit global CORS configurations directly
 app = FastAPI(
     lifespan=lifespan,
     openapi_url="/openapi.json",
@@ -62,12 +62,12 @@ app = FastAPI(
 # Explicitly bind middleware directly onto the app container instance
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://titusz87.github.io", "http://localhost"], # Explicitly trust your GitHub Pages production domain
+    allow_origins=["https://github.io", "http://localhost"], # Trust your GitHub Pages production domain and local workspace
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"], # Explicitly declare permitted preflight verbiage 
+    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"], # Explicitly declare permitted preflight methods
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=600, # Cache preflight responses for 10 minutes to make the app incredibly fast
+    max_age=600, # Cache preflight responses for 10 minutes to reduce network overhead
 )
 
 # Add your sub-routers AFTER the global middleware wrapper is fully locked in
@@ -94,6 +94,7 @@ def do_additional_db_jobs():
 
         session.commit()
 
-def do_additional_db_jobs():
+# FIXED: Reestablished correct function tracking label
+def do_additional_firebase_jobs():
     if test_firebase_notification_system:
         firebase_test_notification()
