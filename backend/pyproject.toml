@@ -17,5 +17,6 @@ dependencies = [
     "scikit-learn",
 ]
 
+
 [tool.fastapi]
 entrypoint = "app.main:app"
