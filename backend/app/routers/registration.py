@@ -18,12 +18,13 @@ class StartupRequest(BaseModel):
 
 #this is the route that runs ONCE when a device connects for the first time (to give the device a unique id and save fcm token in the backend)
 @router.post("/create-person")
-def register_person(data: StartupRequest): # Removed the _verified_app dependency bloc
+def register_person(data: StartupRequest):
     
+    # FIXED: Passed as ordered positional arguments to eliminate parameter naming conflicts
     person_id = create_person(
-        latitude=data.latitude,
-        longitude=data.longitude,
-        fcm_token=data.fcm_token
+        data.latitude,
+        data.longitude,
+        data.fcm_token
     )
 
     return {
