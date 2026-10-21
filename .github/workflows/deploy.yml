@@ -35,7 +35,13 @@ jobs:
       - name: Build Flutter Web
         run: |
           cd client
-          flutter build web --release --base-href "/EchoGround-app/"
+          flutter build web --release \
+            --dart-define=FIREBASE_API_KEY="AIzaSyCEHGEaPKdVvy5ztmxJRQOeX08FOtBU1Hc" \
+            --dart-define=FIREBASE_APP_ID="1:254583394013:web:bc071bd0dc394a2b07d534" \
+            --dart-define=FIREBASE_MESSAGING_SENDER_ID="254583394013" \
+            --dart-define=FIREBASE_PROJECT_ID="country-ready" \
+            --dart-define=FIREBASE_VAPID_KEY="${{ secrets.FIREBASE_VAPID_KEY }}" \
+            --base-href "/EchoGround-app/"
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
