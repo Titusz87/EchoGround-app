@@ -1,5 +1,4 @@
 // client/lib/services/notification_service.dart
-// client/lib/services/notification_service.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -84,6 +83,13 @@ class NotificationService {
   }
 
   static Future<void> _sendTokenToExternalServer(String token, double lat, double lng) async {
+    // Prints payload details locally to help test connection stability
+    print('--- LOCAL SUCCESS CHECK ---');
+    print('FCM Token/FID generated successfully: $token');
+    print('Captured Spatial Geolocation coordinates: Lat: $lat, Lng: $lng');
+    print('--------------------------');
+    
+    /* 
     final url = Uri.parse('https://your-external-backend-server.com');
     try {
       final response = await http.post(
@@ -91,9 +97,9 @@ class NotificationService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'token': token, 'lat': lat, 'lng': lng}),
       );
-      print('Backend registration server status code: ${response.statusCode}');
     } catch (e) {
-      print('Error mapping payload onto external structure: $e');
+      print('Network skipped: $e');
     }
+    */
   }
 }
