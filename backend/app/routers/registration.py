@@ -41,6 +41,9 @@ def register_person(data: StartupRequest):
 
 
 # ADDED: This is the route that runs to grab all active hazards standing near a specific device index block
+# NOTE: this endpoint is used by the frontend dashboard view to fetch and plot 
+# a complete live list of nearby active hazards on the map screen canvas 
+# (useful because firebase push alerts only handle one-time temporary events
 @router.get("/person/{person_id}/incidents")
 def get_nearby_incidents_for_person(person_id: int):
     with get_session() as session:
