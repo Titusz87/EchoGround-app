@@ -83,23 +83,28 @@ class NotificationService {
   }
 
   static Future<void> _sendTokenToExternalServer(String token, double lat, double lng) async {
-    // Prints payload details locally to help test connection stability
-    print('--- LOCAL SUCCESS CHECK ---');
-    print('FCM Token/FID generated successfully: $token');
-    print('Captured Spatial Geolocation coordinates: Lat: $lat, Lng: $lng');
-    print('--------------------------');
+    // 1. Pull base deployment server path from environment parameters
+    const String backendBaseUrl = String.fromEnvironment('BACKEND_URL');
     
-    /* 
-    final url = Uri.parse('https://your-external-backend-server.com');
+    // 2. UPDATED: Target Evan's explicit subpath address channel
+    final url = Uri.parse('$backendBaseUrl/create-person');
+    
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'token': token, 'lat': lat, 'lng': lng}),
+        // 3. UPDATED: Match the exact variable naming conventions expected by StartupRequest
+        body: jsonEncode({
+          'fcm_token': token,
+          'latitude': lat,
+          'longitude': lng,
+        }),
       );
+      print('Backend registration server status code: ${response.statusCode}');
+      print('Backend Response Body Array context: ${response.body}');
     } catch (e) {
-      print('Network skipped: $e');
+      print('Network connection error: $e');
     }
-    */
   }
+
 }
