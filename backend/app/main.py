@@ -13,10 +13,11 @@ from app.services.incident_sync import custom_quadtree
 from app.services.firebase import initialise_firebase, firebase_test_notification
 from app.database import connect_to_db, get_session
 from app.routers.registration import router as registration_router
+from app.routers.system_testing import router as system_testing_router
 #from app.routers.something_else import router as something_else
 from app.services import db_helpers as db
 from app import models
-from app.services.create_db_rows import create_random_people
+from app.services.create_fake_data import create_random_people
 
 #--------------config vars------------------------------------------
 
@@ -78,6 +79,7 @@ async def preflight_handler(request_response: Response):
 
 # Adds sub-routers AFTER the interceptor handler is established
 app.include_router(registration_router)
+app.include_router(system_testing_router)
 
 #the root of the API
 @app.get("/")

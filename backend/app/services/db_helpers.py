@@ -1,7 +1,7 @@
-from sqlalchemy import delete
-from sqlalchemy import select
+from sqlalchemy import select, inspect, delete
 from app.database import get_session
-
+from app.database import engine
+from app.models import Base
 
 #-------config-------------------------------------
 
@@ -25,7 +25,8 @@ def convert_incidents_orm_objects(incidents, incident_type):
             last_updated = incident.last_updated,
             expires = incident.expires,
             description = incident.description, 
-            address = incident.address
+            address = incident.address,
+            created = incident.created
         )
         translated.append(current_incident)
     return translated
@@ -95,10 +96,17 @@ def flush_db_table(session, model):
     try:
         session.execute(delete(model))
 
-
         print(f"Prepared all rows from {model.__tablename__} to be deleted")
     except Exception as e:
         print(f"Failed to flush db table: {e}")
+
+def flush_all_tables(session):
+    try:
+        for table in reversed(Base.metadata.sorted_tables):
+            session.execute(table.delete())
+        print("Wiped all data from all tables")
+    except Exception as e:
+        print(f"Failed to wipe data from all tables: {e}")
 
 #return any wanted info about tables for debugging
 def print_table_info(session, model):

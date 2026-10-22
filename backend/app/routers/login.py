@@ -25,8 +25,8 @@ class LocationUpdateRequest(BaseModel):
 
 #---------------------------------------------------------------
 
-#TODO the POST that sends location when the app refreshes 
-@router.post("/update-location")
+#TODO the PATCH that updates location of a person 
+@router.patch("/person/update-location")
 def update_location(data: LocationUpdateRequest):
     #TODO: retrieve user from people table, rewrite their location data
 

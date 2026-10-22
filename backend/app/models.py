@@ -30,6 +30,7 @@ class Incident(Base):
     expires: Mapped[datetime | None]       #datetime values might need to be converted to timezone values
     description: Mapped[str | None]
     address: Mapped[str | None]
+    created: Mapped[datetime] #this value is created by our program in case 'expires' is null  
 
 #these 3 tables inherit from the incident class
 #Current_Incident stores the incidents that are in progress

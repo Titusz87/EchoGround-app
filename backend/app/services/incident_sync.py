@@ -1,7 +1,7 @@
 from app import models
 from app.database import get_session
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import app.services.db_helpers as db
 from app.services.quadtree import Quadtree
 import numpy as np
@@ -19,11 +19,13 @@ custom_quadtree = False
 notification_fields  = ["status", "warning_level", "latitude", "longitude", "description", "address"] #people get updated when these fields change
 push_user_notifications = True
 print_user_notifications = True
+stale_incident_time_days = 1   
 
 #-------------------------------info-----------------------------------------
 
 possible_warning_levels = ['advice', 'none', 'watch_and_act']
 possible_statuses = ['completed', 'safe', 'active', 'controlled', 'contained']
+example_incidents = ['burn_off', 'hazmat', 'bushfire', 'structure_fire', 'medical', 'vehicle_fire', 'rescue', 'grass_fire', 'flood', 'earthquake', 'vehicle_accident', 'storm', 'other', 'other_fire', 'alarm', 'tree_down']
 
 #--------------------------fn's called from other scripts-----------------------------------------------
 
@@ -51,10 +53,10 @@ def update_database_incidents(incidents):
         #this is because the expired and completed incidents are still pulled from dataquolls API each time it polls.
         #so because the incidents that were archived (due to being expired or completed) were removed from current_incidents in the last poll...
         #they are treated as new incidents here. This means that before we insert the new incidents, we need to filter the ones that are in the archived table
-        current_incident_ids = db.get_ids_from_table(session, models.Current_Incident)
-        temporary_incident_ids = db.get_ids_from_table(session, models.Temporary_Incident) 
+        current_incident_ids = db.get_ids_from_table(session, models.Current_Incident) or []
+        temporary_incident_ids = db.get_ids_from_table(session, models.Temporary_Incident) or []
+        archived_incidents_ids = db.get_ids_from_table(session, models.Archived_Incident) or []
         new_incidents_ids = get_new_ids_safe(current_incident_ids, temporary_incident_ids)
-        archived_incidents_ids = db.get_ids_from_table(session, models.Archived_Incident)
         filtered_incident_ids = set(new_incidents_ids) - set(archived_incidents_ids)
         insert_incidents = db.get_rows_from_ids(session, models.Temporary_Incident, filtered_incident_ids)
         insert_incidents = db.convert_incidents_orm_objects(insert_incidents, models.Current_Incident)
@@ -147,15 +149,25 @@ def get_expired_incidents(session, model):
     check = db.get_all_rows(session, model)
     expired = []
     time_now = datetime.now(timezone.utc)
+    stale_incident_count = 0
 
     for incident in check:
+        stale_incident = False
         if incident.expires is None:
-            continue
-        expiry_time = incident.expires
+            #check against our created value
+            expiry_time = incident.created + timedelta(days = stale_incident_time_days)
+            stale_incident = True
+        else:
+            expiry_time = incident.expires
+        
         if expiry_time.tzinfo is None:
             expiry_time = expiry_time.replace(tzinfo=timezone.utc)
         if expiry_time < time_now:
             expired.append(incident)
+            if stale_incident:
+                stale_incident_count += 1
+
+    print(f"{stale_incident_count} incidents without provided expiry times have gone stale (Expiry Time: f{stale_incident_time_days})")
     return expired
 
 #check for status/warning level changes
@@ -207,13 +219,15 @@ def print_incidents_info(session):
     db.print_table_info(session, models.Archived_Incident)
 
 def get_new_ids_safe(old_ids, new_ids):
-    in_common_ids = set(old_ids) & set(new_ids)
-    truly_new_ids = set(new_ids) - in_common_ids
-    return truly_new_ids
+    old_ids = set(old_ids or [])
+    new_ids = set(new_ids or [])
+    return new_ids - old_ids
 
 def use_quadtree(session):
     current_incident_rows = db.get_all_rows(session, models.Current_Incident)
-    people = db.get_all_rows(session, models.People)
+    people = db.get_all_rows(session, models.People) or []
+    if len(people) == 0:
+        return {}
     results = {}
     print("Spatially partitioning incidents for user location updates...")
     

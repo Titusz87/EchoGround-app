@@ -1,7 +1,7 @@
 import httpx
 import os
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timezone
 from app.services.incident_sync import update_database_incidents
 
 #-------vars------------------------------------------------
@@ -44,6 +44,7 @@ class Incident:
                         if properties["details"].get("expires")
                         else None
                         )
+            self.created = datetime.now(timezone.utc)
         except Exception as e:
             print("Error creating Incident object from polling")
 
