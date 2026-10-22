@@ -20,9 +20,9 @@ from app.services.create_db_rows import create_random_people
 
 #--------------config vars------------------------------------------
 
-auto_poll = True
+auto_poll = False
 poll_on_startup = True
-auto_poll_interval = 2
+auto_poll_interval = 15
 test_firebase_notification_system = False
 flush_db_models = []
 create_db_people = 0
@@ -76,7 +76,7 @@ app.add_middleware(
 async def preflight_handler(request_response: Response):
     return request_response
 
-# Add your sub-routers AFTER the interceptor handler is established
+# Adds sub-routers AFTER the interceptor handler is established
 app.include_router(registration_router)
 
 #the root of the API
