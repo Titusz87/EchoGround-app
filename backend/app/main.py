@@ -20,7 +20,7 @@ from app.services.create_db_rows import create_random_people
 
 #--------------config vars------------------------------------------
 
-auto_poll = False
+auto_poll = True
 poll_on_startup = True
 auto_poll_interval = 2
 test_firebase_notification_system = False
