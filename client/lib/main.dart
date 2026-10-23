@@ -1,4 +1,3 @@
-// client/lib/main.dart
 import 'package:flutter/material.dart';
 import 'services/notification_service.dart';
 import 'screens/guest_mode/guest_mode_dashboard.dart';
