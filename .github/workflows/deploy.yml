@@ -36,12 +36,12 @@ jobs:
         run: |
           cd client
           flutter build web --release \
-            --dart-define=FIREBASE_API_KEY="AIzaSyBUy-D-5hh5u7G6ecgzr333R4wdhlK-Lxk" \
-            --dart-define=FIREBASE_APP_ID="1:600189671041:web:5cacabe5a91205faaa5f80" \
-            --dart-define=FIREBASE_MESSAGING_SENDER_ID="600189671041" \
-            --dart-define=FIREBASE_PROJECT_ID="echoground-9f92d" \
+            --dart-define=FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}" \
+            --dart-define=FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}" \
+            --dart-define=FIREBASE_MESSAGING_SENDER_ID="${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" \
+            --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
             --dart-define=FIREBASE_VAPID_KEY="${{ secrets.FIREBASE_VAPID_KEY }}" \
-            --dart-define=BACKEND_URL="https://echoground-backend.fastapicloud.dev" \
+            --dart-define=BACKEND_URL="${{ secrets.BACKEND_URL }}" \
             --base-href "/EchoGround-app/"
 
       - name: Deploy to GitHub Pages
