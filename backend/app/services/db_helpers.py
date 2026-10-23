@@ -98,7 +98,9 @@ def flush_db_table(session, model):
 
         print(f"Prepared all rows from {model.__tablename__} to be deleted")
     except Exception as e:
-        print(f"Failed to flush db table: {e}")
+        message = f"Failed to flush db table: {e}"
+        print(message)
+        return message
 
 def flush_all_tables(session):
     try:

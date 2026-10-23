@@ -17,16 +17,22 @@ from app.routers.system_testing import router as system_testing_router
 #from app.routers.something_else import router as something_else
 from app.services import db_helpers as db
 from app import models
-from app.services.create_fake_data import create_random_people
+from app.services.create_fake_data import create_fake_people
+from app.services import system_settings as system_settings
 
-#--------------config vars------------------------------------------
+#--------------config------------------------------------------
 
-auto_poll = False
-poll_on_startup = True
-auto_poll_interval = 15
-test_firebase_notification_system = False
-flush_db_models = []
-create_db_people = 0
+#if the system vars aren't set yet then set them to these default states
+#only call this fn after connection to db is established 
+def initialise_system_settings():
+    with get_session() as session:
+
+        #create default settings if the row doesn't exist
+        settings = session.get(models.SystemSettings, "main")
+        if settings is None:
+            session.add(models.SystemSettings(key="main"))
+            session.commit()
+
 
 #-----------------------------------------------------
 
@@ -39,16 +45,17 @@ async def lifespan(app: FastAPI):
     firebase_app = initialise_firebase()
     app.state.firebase_app = firebase_app
     connect_to_db()
+    initialise_system_settings()
     setup_polling()
     do_additional_db_jobs()
     do_additional_firebase_jobs()
-    if poll_on_startup:
+    if system_settings.get("poll_on_startup"):
         await poll_all_states() #poll immediately on startup for testing
     
     #schedule polling (and database sync/ push notifications)
     scheduler = AsyncIOScheduler()
-    if auto_poll:
-        scheduler.add_job(poll_all_states, "interval", minutes=auto_poll_interval)
+    if system_settings.get("auto_poll"):
+        scheduler.add_job(poll_all_states, "interval", minutes=system_settings.get("auto_poll_interval"))
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -84,24 +91,17 @@ app.include_router(system_testing_router)
 #the root of the API
 @app.get("/")
 def root():
-    return {"message": "Hello from CountryReady!"}
+    return {"message": "Hello from EchoGround!"}
 
 #can do database stuff here
 def do_additional_db_jobs():
     with get_session() as session:
 
-        #options to flush tables
-        if flush_db_models:
-            for model in flush_db_models:
-                db.flush_db_table(session, model)
-                db.print_table_info(session, model)
-
-        #option to randomly create db data
-        if create_db_people > 0:
-            create_random_people(create_db_people)
+        #nothing needed here at the moment
 
         session.commit()
 
 def do_additional_firebase_jobs():
-    if test_firebase_notification_system:
+    if system_settings.get("test_firebase_notification_system"):
         firebase_test_notification()
+

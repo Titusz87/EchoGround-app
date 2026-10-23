@@ -3,7 +3,7 @@ from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from datetime import datetime 
 from sqlalchemy import DateTime
-from sqlalchemy import Integer, ForeignKey, String
+from sqlalchemy import Integer, ForeignKey, String, Boolean
 from sqlalchemy.dialects.postgresql import ARRAY
 
 #--------------table classes (define how to read and write objects to db)------------------------------
@@ -72,7 +72,7 @@ class Household(Base):
     latitude: Mapped[float] 
     longitude: Mapped[float] 
 
-#-------------------------------------------------------------------------------------------------
+#------------------profile classes------------------------------------------------------------
 
 #this table store the community info that is created by community leaders
 class Community_Profile(Base):
@@ -84,3 +84,27 @@ class People_Incident(Base):
     __tablename__ = "people_incidents"
     id: Mapped[int] = mapped_column(ForeignKey("people.id"),primary_key=True)           #this is the same as the primary key for people
     incident_ids: Mapped[list[str]] = mapped_column(ARRAY(String),default=list)         #this string can store the id's of incidents
+
+#--------------------system settings/info-----------------------------------------------------
+
+#using this instead of global vars for the programs behavior 
+class SystemSettings(Base):
+    __tablename__ = "system_settings"
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+
+    #incidents sync occurs after dataquoll is polled 
+    write_to_db: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    #controls polling behavior
+    auto_poll: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    poll_on_startup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    auto_poll_interval: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+
+    #run a firebase test on startup
+    test_firebase_notification_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    #variables for incident sync
+    stale_incident_time_days: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    push_user_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    fake_incident_id_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    notify_within_radius: Mapped[int] = mapped_column(Integer, default=20, nullable=False)

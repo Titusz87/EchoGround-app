@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 from app.services.incident_sync import update_database_incidents
+import asyncio
 
 #-------vars------------------------------------------------
 
@@ -17,6 +18,7 @@ API_KEY = None
 verbose_debug = False
 write_to_db = True
 poll_states = ["nsw", "vic", "qld", "wa", "sa", "tas", "act", "nt"]
+poll_lock = asyncio.Lock()
 
 #-------classes------------------------------------------------
 class Incident:
@@ -76,28 +78,30 @@ def setup_polling():
 
 #this fn is called from main.py
 async def poll_all_states():
-    incidents = []
-    print("Polling...")
-    for s in poll_states:
-        if verbose_debug:
-            print(f"Polling state: {s}")
+    #make sure this code can't run more than once while requests are arriving in
+    async with poll_lock: 
         
-        state_incidents = await poll_dataquoll_by_state(s)
-        
-        if verbose_debug:
-            print(f"\tRecorded {len(state_incidents)} incidents")
-        
-        for i in state_incidents:
-            incidents.append(i)
-    print(f"Polled {len(incidents)} incidents from states: {poll_states}")
+        incidents = []
+        print("Polling...")
+        for s in poll_states:
+            if verbose_debug:
+                print(f"Polling state: {s}")
+            
+            state_incidents = await poll_dataquoll_by_state(s)
+            
+            if verbose_debug:
+                print(f"\tRecorded {len(state_incidents)} incidents")
+            
+            for i in state_incidents:
+                incidents.append(i)
+        print(f"Polled {len(incidents)} incidents from states: {poll_states}")
 
-    #get more info about dataquoll data if we want 
-    if verbose_debug:
+        #get more info about dataquoll data if we want 
         print_attribute_sets(incidents)
 
-    #done now, so write new polled data to db if we want
-    if write_to_db:
-        update_database_incidents(incidents)
+        #done now, so write new polled data to db if we want
+        if write_to_db:
+            update_database_incidents(incidents)
 
     
 #get state data from dataquoll api
@@ -144,11 +148,11 @@ def print_attribute_sets(incidents):
         statuses.add(i.status)
         warning_levels.add(i.warning_level)
 
-    print("Collected possible values:")
+    print("Collected values such as:")
     print(f"\tEvent Types: {event_types}")
     print(f"\tStatuses: {statuses}")
     print(f"\tWarning Levels: {warning_levels}")
-    print(f"\tUnset Values: {unset_values}")
+    #print(f"\tUnset Values: {unset_values}")
 
 
 

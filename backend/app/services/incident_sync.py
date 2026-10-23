@@ -7,19 +7,17 @@ from app.services.quadtree import Quadtree
 import numpy as np
 from sklearn.neighbors import BallTree
 from app.services.firebase import send_firebase_notification
+import app.services.system_settings as system_settings
 
 #------------------script vars-----------------------
 quadtree = None
-UNSAFE_BUSHFIRE_DISTANCE = 30
 
 #---------------------config---------------------------------
 
 verbose_debug = False
 custom_quadtree = False
 notification_fields  = ["status", "warning_level", "latitude", "longitude", "description", "address"] #people get updated when these fields change
-push_user_notifications = True
-print_user_notifications = True
-stale_incident_time_days = 1   
+print_user_notifications = True 
 
 #-------------------------------info-----------------------------------------
 
@@ -31,10 +29,14 @@ example_incidents = ['burn_off', 'hazmat', 'bushfire', 'structure_fire', 'medica
 
 #this fn is called from the polling script
 #this is complicated. Please don't touch it!
-def update_database_incidents(incidents):
+def update_database_incidents(incidents, fake_incidents = False):
     with get_session() as session:
         
         print("Updating db records...")
+
+        #if incidents are fake we need to retrieve a fake id from system records 
+
+
 
         #------------------------insert polled incidents in temporary_incidents table-------------------------    
         
@@ -122,7 +124,7 @@ def update_database_incidents(incidents):
         
         #incident updates are a nested dictionary like this -> { incident_id: { field: new status } }
         #nearby_incident_data is { person_id : [list of incidents] }
-        if push_user_notifications:
+        if system_settings.get("push_user_notifications"):
             push_data = create_user_notification_data(nearby_incident_data, current_incident_updates)
             people_with_updates_count =  people_with_updates_count = sum(bool(incidents) for incidents in push_data.values())
             print(f"{people_with_updates_count} out of {len(db.get_all_rows(session, models.People))} people have incident updates")
@@ -150,6 +152,7 @@ def get_expired_incidents(session, model):
     expired = []
     time_now = datetime.now(timezone.utc)
     stale_incident_count = 0
+    stale_incident_time_days = system_settings.get("stale_incident_time_days")
 
     for incident in check:
         stale_incident = False
@@ -230,6 +233,8 @@ def use_quadtree(session):
         return {}
     results = {}
     print("Spatially partitioning incidents for user location updates...")
+
+    notify_within_radius = system_settings.get("notify_within_radius")
     
     if custom_quadtree:
         #extract only relevant data    
@@ -243,14 +248,14 @@ def use_quadtree(session):
         people_locations = [Quadtree.IncidentPoint(person.latitude,person.longitude,person.id) for person in people]
         results = {person.id: [] for person in people_locations}
         for person in people_locations:
-            found_incidents = quadtree.find_nearby_incidents(person,UNSAFE_BUSHFIRE_DISTANCE)
+            found_incidents = quadtree.find_nearby_incidents(person, notify_within_radius)
             results[person.id] = [incident.id for incident in found_incidents]
     else:
         #this is the solution from a balltree library 
         incident_coords = np.radians([[row.latitude, row.longitude] for row in current_incident_rows])
         people_coords = np.radians([[person.latitude, person.longitude] for person in people])
         tree = BallTree(incident_coords, metric="haversine")
-        radius_radians = UNSAFE_BUSHFIRE_DISTANCE / 6371.0
+        radius_radians = notify_within_radius / 6371.0    #the radius of the earth
         results_indices = tree.query_radius(people_coords, r=radius_radians)
         for person, incident_indices in zip(people, results_indices):
             results[person.id] = [current_incident_rows[i].id for i in incident_indices]
