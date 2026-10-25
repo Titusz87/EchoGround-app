@@ -29,14 +29,11 @@ example_incidents = ['burn_off', 'hazmat', 'bushfire', 'structure_fire', 'medica
 
 #this fn is called from the polling script
 #this is complicated. Please don't touch it!
+#it can take real incidents as well as fake ones 
 def update_database_incidents(incidents, fake_incidents = False):
     with get_session() as session:
         
         print("Updating db records...")
-
-        #if incidents are fake we need to retrieve a fake id from system records 
-
-
 
         #------------------------insert polled incidents in temporary_incidents table-------------------------    
         
@@ -45,7 +42,7 @@ def update_database_incidents(incidents, fake_incidents = False):
         #we need to store the new incidents in a temporary table for logic later (temporary_incidents should be empty-> it is flushed at the end of this fn)
         temporary_incidents = db.convert_incidents_orm_objects(incidents, models.Temporary_Incident) 
         db.write_list_to_db(session, temporary_incidents)          
-        print(f"Added {len(temporary_incidents)} new incidents to temporary_incidents")
+        print(f"Added {len(temporary_incidents)} {"fake" if fake_incidents == True else "new"} incidents to temporary_incidents")
         print_incidents_info(session)
 
         #---------------------------Add the new incidents to current_incidents table----------------------------------
@@ -110,11 +107,20 @@ def update_database_incidents(incidents, fake_incidents = False):
         #nearby_incident_data is { person_id : [list of incidents] }
         nearby_incident_data = use_quadtree(session)
         people_to_incident_rows = db.get_all_rows(session, models.People_Incident)
+
+        #find the incidents that users aren't 'subscribed' to yet and inform them
+        push_data_new_incidents = {}
         for row in people_to_incident_rows: 
-            row.incident_ids = nearby_incident_data.get(row.id)
-        #db.write_list_to_db(session, people_to_incident_rows)        
+            fresh_incident_ids = nearby_incident_data.get(row.id, [])
+            new_incidents_near_person = list(set(fresh_incident_ids) - set(row.incident_ids))
+            push_data_new_incidents[row.id] = new_incidents_near_person
+            row.incident_ids = list(set(fresh_incident_ids))
+        notify_users(session, push_data_new_incidents)       
+        
         nearby_incident_count = sum(1 for person_id, incident_ids in nearby_incident_data.items() if incident_ids)
         print(f"{nearby_incident_count} people have nearby incidents occurring")
+        nearby_new_incidents_count = sum(1 for person_id, incident_ids in push_data_new_incidents.items() if incident_ids)
+        print(f"{nearby_new_incidents_count} people have new incidents occurring")
 
         #--------------------Search nearby_incident_data to send users updates-------------------------------- 
 
@@ -126,7 +132,7 @@ def update_database_incidents(incidents, fake_incidents = False):
         #nearby_incident_data is { person_id : [list of incidents] }
         if system_settings.get("push_user_notifications"):
             push_data = create_user_notification_data(nearby_incident_data, current_incident_updates)
-            people_with_updates_count =  people_with_updates_count = sum(bool(incidents) for incidents in push_data.values())
+            people_with_updates_count = sum(bool(incidents) for incidents in push_data.values())
             print(f"{people_with_updates_count} out of {len(db.get_all_rows(session, models.People))} people have incident updates")
             notify_users(session, push_data)
 
@@ -170,7 +176,7 @@ def get_expired_incidents(session, model):
             if stale_incident:
                 stale_incident_count += 1
 
-    print(f"{stale_incident_count} incidents without provided expiry times have gone stale (Expiry Time: f{stale_incident_time_days})")
+    print(f"{stale_incident_count} incidents without provided expiry times have gone stale (Expiry Time: {stale_incident_time_days} days)")
     return expired
 
 #check for status/warning level changes

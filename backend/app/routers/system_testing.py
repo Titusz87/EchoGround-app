@@ -20,13 +20,13 @@ router = APIRouter()
 
 #create people with random locations
 @router.post("/system/create-people")
-def create_fake_people(number_of_people: int = Path(ge=0, le=10000)): #only numbers between 0 and 10000 allowed
+def create_fake_people_route(number_of_people: int = Query(ge=0, le=10000)): #only numbers between 0 and 10000 allowed
     
-    create_fake_people(number_of_people)
+    ids = create_fake_people(number_of_people)
 
     return {
         "status": "ok",
-        "message": "Created {number_of_people} fake people",
+        "message": f"Created fake people with ids: {ids}",
     }
 
 #wipe a single table from db 
@@ -102,12 +102,11 @@ async def poll_dataquoll(sync_db: bool):
     }
 
 @router.post("/system/create-incidents")
-async def create_fake_incidents(person_id: int = Query(..., ge=0), number_of_incidents: int = Query(..., ge=0),): #values have to be inputted and greater than 0
+async def create_fake_incidents_route(person_id: int = Query(..., ge=0), number_of_incidents: int = Query(..., ge=0),): #values have to be inputted and greater than 0
 
-    status = create_fake_incidents(person_id, number_of_incidents)
-    
+    ids = create_fake_incidents(person_id, number_of_incidents)
     return {
             "status": "ok",
-            "message": "created fake incidents"
+            "message": f"created incidents: {ids} near person_id '{person_id}'"
         }
 

@@ -22,15 +22,17 @@ class Incident(Base):
     event_type: Mapped[str]
     status: Mapped[str]
     warning_level: Mapped[str]
-    state: Mapped[str]
+    state: Mapped[str | None]
     latitude: Mapped[float]
     longitude: Mapped[float]
-    last_updated: Mapped[datetime] #dataquoll provides timezone-aware ISO 8601 timestamps for time values
+    last_updated: Mapped[datetime | None] #dataquoll provides timezone-aware ISO 8601 timestamps for time values
     reported_time: Mapped[datetime | None] #these values may be blank
     expires: Mapped[datetime | None]       #datetime values might need to be converted to timezone values
     description: Mapped[str | None]
     address: Mapped[str | None]
     created: Mapped[datetime] #this value is created by our program in case 'expires' is null  
+    #fake_incident: Mapped[Boolean | False] #this is a value we can use to track whether we've purposely created a fake incident for testing 
+    fake_incident: Mapped[bool] = mapped_column(Boolean, default=False)
 
 #these 3 tables inherit from the incident class
 #Current_Incident stores the incidents that are in progress
@@ -108,3 +110,6 @@ class SystemSettings(Base):
     push_user_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     fake_incident_id_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     notify_within_radius: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+
+    #count stuff inside the program
+    fake_incident_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False) #use this to create fake incident ids

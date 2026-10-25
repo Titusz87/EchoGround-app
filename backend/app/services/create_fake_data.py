@@ -1,24 +1,45 @@
-from geopy.distance import geodesic
 from app.services.registration import create_person
 import app.services.db_helpers as db
-import random
 import math
 from app.database import get_session
 from app import models
 from app.services import system_settings 
+import random 
+from datetime import datetime, timezone
+from app.services import incident_sync 
+
+event_types = ['bushfire', 'medical', 'flood', 'earthquake', 'vehicle_accident', 'storm']
+warning_levels = ['advice', 'none', 'watch_and_act']
 
 def create_fake_people(amount):
+    ids = []
     for i in range(amount):
         latitude = random.uniform(-43.6, -10.0)
         longitude = random.uniform(113.0, 153.6)
-        create_person(latitude, longitude)
+        id = create_person(latitude, longitude)
+        ids.append(id)
     print(f"Created {i+1} fake people with random locations in Aus")
+    return ids
 
-#TODO: make fake incident and insert into db 
-def create_fake_incident():
-    pass
+def create_fake_incident(_latitude, _longitude):   
+    #make some fake incidents with the base ORM class
+    incident = models.Temporary_Incident(
+        id = get_next_fake_id(),
+        event_type = random.choice(event_types),
+        status = "active",
+        warning_level = random.choice(warning_levels),
+        latitude = _latitude,
+        longitude = _longitude,
+        created = datetime.now(timezone.utc),   
+        fake_incident = True 
+    )
+    return incident
 
 def create_fake_incidents(person_id, amount):
+    if amount < 1:
+        print("Cannot create less than 1 fake incident")
+        return
+    
     with get_session() as session:
         
         #check if person exists in db and retrieve their lat/lon
@@ -28,12 +49,18 @@ def create_fake_incidents(person_id, amount):
         if person.latitude is None or person.longitude is None:
             return "latitude/longitude of person is not set"
 
+        #create fake incidents with random locations and append them to list
         radius = system_settings.get("notify_within_radius")
-        latitude, longitude = random_location_within_radius(person.latitude, person.longitude, radius)
+        fake_incidents = []
         for _ in range(amount):
-            create_fake_incident()
-    
+            latitude, longitude = random_location_within_radius(person.latitude, person.longitude, radius)
+            incident = create_fake_incident(latitude, longitude)
+            fake_incidents.append(incident)
 
+    #now sync the database with the new fake incidents
+    incident_sync.update_database_incidents(fake_incidents, fake_incidents=True)
+    return [incident.id for incident in fake_incidents]
+    
 #AI generated math 
 def random_location_within_radius(latitude: float, longitude: float, radius_km: float) -> tuple[float, float]:
     earth_radius_km = 6371.0
@@ -57,8 +84,10 @@ def random_location_within_radius(latitude: float, longitude: float, radius_km: 
     
     return new_latitude, new_longitude
  
+#----------------------------helpers-------------------------------------
 
-
-
-
-
+#get the available number of fake incident. then increase it by 1 for the next use
+def get_next_fake_id():
+    fake_incident_count = system_settings.get("fake_incident_count")
+    system_settings.set("fake_incident_count", fake_incident_count + 1)
+    return f"fake_incident{fake_incident_count}"

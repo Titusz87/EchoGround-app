@@ -26,7 +26,8 @@ def convert_incidents_orm_objects(incidents, incident_type):
             expires = incident.expires,
             description = incident.description, 
             address = incident.address,
-            created = incident.created
+            created = incident.created,
+            fake_incident = incident.fake_incident
         )
         translated.append(current_incident)
     return translated
@@ -105,6 +106,9 @@ def flush_db_table(session, model):
 def flush_all_tables(session):
     try:
         for table in reversed(Base.metadata.sorted_tables):
+            #don't erase the system settings!!!
+            if table.name == "system_settings":
+                continue
             session.execute(table.delete())
         print("Wiped all data from all tables")
     except Exception as e:

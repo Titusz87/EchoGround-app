@@ -20,22 +20,6 @@ from app import models
 from app.services.create_fake_data import create_fake_people
 from app.services import system_settings as system_settings
 
-#--------------config------------------------------------------
-
-#if the system vars aren't set yet then set them to these default states
-#only call this fn after connection to db is established 
-def initialise_system_settings():
-    with get_session() as session:
-
-        #create default settings if the row doesn't exist
-        settings = session.get(models.SystemSettings, "main")
-        if settings is None:
-            session.add(models.SystemSettings(key="main"))
-            session.commit()
-
-
-#-----------------------------------------------------
-
 #this code runs when the server is created 
 #'asynccontextmanager' decorator makes 'lifespan' fn work as a context manager  
 @asynccontextmanager
@@ -45,7 +29,7 @@ async def lifespan(app: FastAPI):
     firebase_app = initialise_firebase()
     app.state.firebase_app = firebase_app
     connect_to_db()
-    initialise_system_settings()
+    system_settings.initialise_system_settings() #this can only be called after connecting to the db 
     setup_polling()
     do_additional_db_jobs()
     do_additional_firebase_jobs()
