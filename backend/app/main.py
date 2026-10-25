@@ -8,6 +8,8 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import logging                                      
+from logtail import LogtailHandler
 from app.services.poll_dataquoll import poll_all_states, setup_polling
 from app.services.incident_sync import custom_quadtree
 from app.services.firebase import initialise_firebase, firebase_test_notification
@@ -26,6 +28,24 @@ auto_poll_interval = 15
 test_firebase_notification_system = False
 flush_db_models = []
 create_db_people = 0
+
+#-----------------------------------------------------
+
+#--------------Better Stack logging---------------------------------  
+
+def setup_betterstack():                                                
+    token = os.getenv("BETTERSTACK_SOURCE_TOKEN")
+    host = os.getenv("BETTERSTACK_INGESTING_HOST")
+    if not token or not host:
+        return  # skips quietly when running locally without these set
+    if not host.startswith("http"):
+        host = f"https://{host}"
+    handler = LogtailHandler(source_token=token, host=host)
+    for name in ("", "uvicorn", "uvicorn.access"):
+        logging.getLogger(name).addHandler(handler)
+    logging.getLogger().setLevel(logging.INFO)
+
+setup_betterstack()                                                     
 
 #-----------------------------------------------------
 
