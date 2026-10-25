@@ -33,10 +33,11 @@ create_db_people = 0
 
 #--------------Better Stack logging---------------------------------  
 
-def setup_betterstack():                                                
+def setup_betterstack():
     token = os.getenv("BETTERSTACK_SOURCE_TOKEN")
     host = os.getenv("BETTERSTACK_INGESTING_HOST")
     if not token or not host:
+        print("Better Stack NOT configured: missing env vars")
         return  # skips quietly when running locally without these set
     if not host.startswith("http"):
         host = f"https://{host}"
@@ -44,8 +45,9 @@ def setup_betterstack():
     for name in ("", "uvicorn", "uvicorn.access"):
         logging.getLogger(name).addHandler(handler)
     logging.getLogger().setLevel(logging.INFO)
+    print("Better Stack handler enabled")
 
-setup_betterstack()                                                     
+setup_betterstack()                                                   
 
 #-----------------------------------------------------
 
