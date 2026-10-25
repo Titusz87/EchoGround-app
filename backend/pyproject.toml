@@ -15,6 +15,7 @@ dependencies = [
     "geopy",
     "numpy",
     "scikit-learn",
+    "logtail-python",
 ]
 
 
