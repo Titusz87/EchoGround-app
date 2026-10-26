@@ -20,26 +20,22 @@
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <!-- CHANGED: added the older Apple tag. WHY: some iOS versions use it to treat the Home Screen icon as an installed app, which web push needs. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="countryready_client">
+  <!-- CHANGED: was "countryready_client". WHY: this is the name shown under the Home Screen icon and in iPhone Settings > Notifications. -->
+  <meta name="apple-mobile-web-app-title" content="EchoGround">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png">
 
-  <title>countryready_client</title>
+  <!-- CHANGED: was "countryready_client". WHY: same name everywhere. -->
+  <title>EchoGround</title>
   <link rel="manifest" href="manifest.json">
-  
-  
+
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
-  
-  
-  
-  
-  
-  
-  
-  
+
   <style id="splash-screen-style">
     html {
       height: 100%
@@ -112,19 +108,7 @@
       <source srcset="splash/img/dark-1x.png 1x, splash/img/dark-2x.png 2x, splash/img/dark-3x.png 3x, splash/img/dark-4x.png 4x" media="(prefers-color-scheme: dark)">
       <img class="center" aria-hidden="true" src="splash/img/light-1x.png" alt="">
   </picture>
-  
-  
-  
-  
-  
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script>
   if ('serviceWorker' in navigator) {
     const originalRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
@@ -139,8 +123,5 @@
   }
   </script>
   <script src="flutter_bootstrap.js" async=""></script>
-
-
-
 
 </body></html>
