@@ -1,4 +1,3 @@
-// client/web/firebase-messaging-sw.js
 importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
 
@@ -17,6 +16,20 @@ const messaging = firebase.messaging();
 // Process incoming background incident data packages when the web tab is closed
 messaging.onBackgroundMessage((payload) => {
   console.log("Background incident payload received: ", payload);
+
+  // --- ADDED: BROADCAST DATA TO FLUTTER APP IMMEDIATELY ON ARRIVAL ---
+  if (payload.data) {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      windowClients.forEach((windowClient) => {
+        // Sends a direct, instant background hardware message straight to web_listener.dart
+        windowClient.postMessage({
+          type: 'INCIDENT_CLICK', 
+          data: payload.data
+        });
+      });
+    });
+  }
+  // ------------------------------------------------------------------
 
   const notificationTitle = payload.data.title || "Incident Alert";
   const notificationOptions = {
