@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/echoground_banner.dart';
 import 'household/household_dashboard.dart';
 import 'community_leader/leader_dashboard.dart';
 
@@ -9,17 +10,21 @@ class LoginPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CountryReady.ai'),
+        title: const Text('EchoGround'),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
+      body: EchoGroundPageBody(
+        maxWidth: 560,
+        padding: const EdgeInsets.all(24),
+        children: [
+          const EchoGroundBanner(),
+          const SizedBox(height: 28),
+          Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Welcome to CountryReady.ai',
+              'Welcome to EchoGround',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 28,
@@ -67,7 +72,8 @@ class LoginPage extends StatelessWidget {
               },
             ),
           ],
-        ),
+          ),
+        ],
       ),
     );
   }

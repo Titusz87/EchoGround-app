@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/echoground_banner.dart';
 import '../map_screen.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/community_leader/household_status_card.dart';
@@ -12,15 +13,14 @@ class LeaderDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CountryReady.ai'),
+        title: const Text('EchoGround'),
         centerTitle: true,
       ),
 
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: const [
+      body: EchoGroundPageBody(
+        children: const [
+            EchoGroundBanner(),
+            SizedBox(height: 20),
             ActiveIncidentsCard(),
             SizedBox(height: 16),
 
@@ -33,8 +33,7 @@ class LeaderDashboard extends StatelessWidget {
 
             CommunityTasksCard(),
       */
-          ],
-        ),
+        ],
       ),
 
       bottomNavigationBar: NavigationBar(

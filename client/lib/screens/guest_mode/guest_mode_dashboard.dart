@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/echoground_banner.dart';
 import '../../widgets/guest_mode/guest_mode_header.dart';
 import '../../widgets/household/current_alert_card.dart';
 import '../../widgets/household/household_status_card.dart';
@@ -16,14 +17,11 @@ class GuestModeDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CountryReady.ai'),
+        title: const Text('EchoGround'),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: const [
+      body: EchoGroundPageBody(
+        children: const [
             GuestModeHeader(),
 
             SizedBox(height: 20),
@@ -49,8 +47,7 @@ class GuestModeDashboard extends StatelessWidget {
 
             CommunityUpdatesCard(),
             */
-          ],
-        ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,

@@ -40,7 +40,7 @@ class _ActiveIncidentsCardState extends State<ActiveIncidentsCard> {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: FutureBuilder<List<Map<String, dynamic>>>(
           future: _incidentsFuture,
           builder: (context, snapshot) {
@@ -56,9 +56,12 @@ class _ActiveIncidentsCardState extends State<ActiveIncidentsCard> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('⚠ ACTIVE INCIDENTS', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const Expanded(
+                      child: Text('⚠ ACTIVE INCIDENTS', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.refresh, size: 20),
+                      tooltip: 'Refresh incidents',
                       onPressed: _refreshIncidents, // Manual refresh anchor for testing!
                     )
                   ],
@@ -70,7 +73,7 @@ class _ActiveIncidentsCardState extends State<ActiveIncidentsCard> {
                 if (incidents.isEmpty) ...[
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Center(child: Text("No current incidents reported.", style: TextStyle(color: Colors.grey))),
+                    child: Center(child: Text("No current incidents reported.", style: TextStyle(color: Color(0xFF59655E)))),
                   ),
                 ] else ...[
                   ListView.separated(
@@ -89,7 +92,7 @@ class _ActiveIncidentsCardState extends State<ActiveIncidentsCard> {
                           Text(item['description']?.toString() ?? 'No description available'),
                           Text(item['address']?.toString() ?? 'Unknown Location'),
                           const SizedBox(height: 4),
-                          Text('${_capitalize(item['status']?.toString())} · Active', style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                          Text('${_capitalize(item['status']?.toString())} · Active', style: const TextStyle(fontSize: 13, color: Color(0xFF59655E))),
                         ],
                       );
                     },
