@@ -4,6 +4,7 @@ import '../../widgets/household/current_alert_card.dart';
 import '../../widgets/household/household_status_card.dart';
 import '../../widgets/household/preparedness_card.dart';
 import '../../widgets/household/community_updates_card.dart';
+import '../../widgets/active_incidents_card.dart';
 import '../login_page.dart';
 
 //import 'package:maplibre_gl/maplibre_gl.dart';
@@ -18,7 +19,7 @@ class GuestModeDashboard extends StatelessWidget {
         title: const Text('CountryReady.ai'),
         centerTitle: true,
       ),
-     body: SingleChildScrollView(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -26,6 +27,11 @@ class GuestModeDashboard extends StatelessWidget {
             GuestModeHeader(),
 
             SizedBox(height: 20),
+
+            // Lists live cached database items natively
+            ActiveIncidentsCard(),
+
+            SizedBox(height: 16),
             /*
 
             CurrentAlertCard(),
@@ -49,15 +55,15 @@ class GuestModeDashboard extends StatelessWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
         onDestinationSelected: (index) {
-    if (index == 2) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const LoginPage(),
-        ),
-      );
-    }
-  },
+          if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LoginPage(),
+              ),
+            );
+          }
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home),
@@ -76,3 +82,4 @@ class GuestModeDashboard extends StatelessWidget {
     );
   }
 }
+
