@@ -1,6 +1,6 @@
 {
-    "name": "countryready_client",
-    "short_name": "countryready_client",
+    "name": "EchoGround",
+    "short_name": "EchoGround",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
