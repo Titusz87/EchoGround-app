@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.neighbors import BallTree
 from app.services.firebase import send_firebase_notification
 import app.services.system_settings as system_settings
+import random
 
 #------------------script vars-----------------------
 quadtree = None
@@ -42,7 +43,7 @@ def update_database_incidents(incidents, fake_incidents = False):
         #we need to store the new incidents in a temporary table for logic later (temporary_incidents should be empty-> it is flushed at the end of this fn)
         temporary_incidents = db.convert_incidents_orm_objects(incidents, models.Temporary_Incident) 
         db.write_list_to_db(session, temporary_incidents)          
-        print(f"Added {len(temporary_incidents)} {"fake" if fake_incidents == True else "new"} incidents to temporary_incidents")
+        print(f"Added {len(temporary_incidents)} {"test" if fake_incidents == True else "new"} incidents to temporary_incidents")
         print_incidents_info(session)
 
         #---------------------------Add the new incidents to current_incidents table----------------------------------
@@ -70,7 +71,7 @@ def update_database_incidents(incidents, fake_incidents = False):
         global notification_fields  
         common_incidents_ids = set(temporary_incident_ids) & set(current_incident_ids)
         current_incident_updates = current_incidents_changed_values(session, common_incidents_ids, notification_fields)
-        print(f"{len(current_incident_updates)} incidents have changed statues to inform users")
+        print(f"{len(current_incident_updates)} incidents have fields that have changed")
         if verbose_debug:
             print(f"Updated incidents: {current_incident_updates}")
         update_incident_table(session, models.Current_Incident, current_incident_updates) 
@@ -86,7 +87,7 @@ def update_database_incidents(incidents, fake_incidents = False):
         completed_incidents = db.get_db_rows_by_all_fields(session, models.Current_Incident, {"status": "completed"})
         expired_incident_ids = [incident.id for incident in expired_incidents] 
         completed_incident_ids = [incident.id for incident in completed_incidents]
-        remove_incidents_ids = set(expired_incident_ids) | set(completed_incident_ids)
+        
         print(f"{len(expired_incidents)} incidents have expired")
         print(f"{len(completed_incidents)} incidents have 'completed' status")
         
@@ -94,6 +95,7 @@ def update_database_incidents(incidents, fake_incidents = False):
         
         #figure out which incidents need to be archived (where ids don't already exist in archived_incidents)
         existing_archived_ids = db.get_ids_from_table(session, models.Archived_Incident)
+        remove_incidents_ids = set(expired_incident_ids) | set(completed_incident_ids)
         new_archived_ids = get_new_ids_safe(existing_archived_ids, remove_incidents_ids)
         new_archived_incidents = db.get_rows_from_ids(session, models.Current_Incident, new_archived_ids)
         new_archived_incidents = db.convert_incidents_orm_objects(new_archived_incidents, models.Archived_Incident) 
@@ -106,21 +108,24 @@ def update_database_incidents(incidents, fake_incidents = False):
         #now the current incidents have been rewritten, create quadtree for nearby incident lookup and rewrite table
         #nearby_incident_data is { person_id : [list of incidents] }
         nearby_incident_data = use_quadtree(session)
+        nearby_incident_count = sum(1 for person_id, incident_ids in nearby_incident_data.items() if incident_ids)
+        print(f"{nearby_incident_count} people have nearby incidents occurring")
         people_to_incident_rows = db.get_all_rows(session, models.People_Incident)
 
         #find the incidents that users aren't 'subscribed' to yet and inform them
-        push_data_new_incidents = {}
-        for row in people_to_incident_rows: 
-            fresh_incident_ids = nearby_incident_data.get(row.id, [])
-            new_incidents_near_person = list(set(fresh_incident_ids) - set(row.incident_ids))
-            push_data_new_incidents[row.id] = new_incidents_near_person
-            row.incident_ids = list(set(fresh_incident_ids))
-        notify_users(session, push_data_new_incidents)       
+        if system_settings.get("push_user_notifications"):
+            push_data_new_incidents = {}
+            for row in people_to_incident_rows: 
+                fresh_incident_ids = nearby_incident_data.get(row.id, [])
+                new_incidents_near_person = list(set(fresh_incident_ids) - set(row.incident_ids))
+                push_data_new_incidents[row.id] = new_incidents_near_person
+                row.incident_ids = list(set(fresh_incident_ids))
+            nearby_new_incidents_count = sum(1 for person_id, incident_ids in push_data_new_incidents.items() if incident_ids)
+            print(f"{nearby_new_incidents_count} people have new incidents occurring")
+            notify_users(session, push_data_new_incidents)       
         
-        nearby_incident_count = sum(1 for person_id, incident_ids in nearby_incident_data.items() if incident_ids)
-        print(f"{nearby_incident_count} people have nearby incidents occurring")
-        nearby_new_incidents_count = sum(1 for person_id, incident_ids in push_data_new_incidents.items() if incident_ids)
-        print(f"{nearby_new_incidents_count} people have new incidents occurring")
+        
+        
 
         #--------------------Search nearby_incident_data to send users updates-------------------------------- 
 
@@ -136,15 +141,29 @@ def update_database_incidents(incidents, fake_incidents = False):
             print(f"{people_with_updates_count} out of {len(db.get_all_rows(session, models.People))} people have incident updates")
             notify_users(session, push_data)
 
+            #we also need to update the test incidents, and send notifications to the users
+            test_incident_updates = update_test_incidents(session)
+            push_test_data = create_user_notification_data(nearby_incident_data, test_incident_updates)
+            people_with_test_updates_count = sum(bool(incidents) for incidents in push_test_data.values())
+            print(f"{people_with_test_updates_count} out of {len(db.get_all_rows(session, models.People))} people have test incident updates") 
+            notify_users(session, push_test_data)
+            
+            
+            
+
+
         
         #------------------Cleanup: flush temporary_incidents and delete archived incidents from current_incidents-----
         
         #can delete the rows in current_incidents that were archived now
         remove_incidents = db.get_rows_from_ids(session, models.Current_Incident, remove_incidents_ids)
         db.delete_db_rows(session, remove_incidents)
-        print(f"Removed {len(remove_incidents)} incidents from current_incidents")
+        print(f"Removed {len(remove_incidents)} archived incidents from current_incidents")
 
-        #we are done with temp table. Print table info and commit
+        #now the archived incident ids need to be removed from people_incidents, meaning that people are no longer 'subscribed' to old incidents
+        unsubscribe_people_from_incidents(session, remove_incidents_ids)
+
+        #we are done with temp table. Print table info and commit session
         db.flush_db_table(session, models.Temporary_Incident)
         print_incidents_info(session)
         session.commit()
@@ -238,7 +257,7 @@ def use_quadtree(session):
     if len(people) == 0:
         return {}
     results = {}
-    print("Spatially partitioning incidents for user location updates...")
+    print("Spatially partitioning incidents...")
 
     notify_within_radius = system_settings.get("notify_within_radius")
     
@@ -270,6 +289,7 @@ def use_quadtree(session):
         print(results)
     return results
 
+#returns {person_id: [updated incident ids]}
 def create_user_notification_data(people_to_incident_data, incident_updates):
     updated_incident_ids = list(incident_updates)
     result = {}
@@ -333,3 +353,39 @@ def create_message_from_incident(row):
         message = message + row.address
     
     return "message"
+
+#get all the rows that are test incidents and give them random updates
+def update_test_incidents(session):
+    testing_incidents = db.get_db_rows_by_all_fields(session, models.Current_Incident, {"test_incident": True})
+
+    #updates are as always... { incident id: { field: new status } }
+    updates = {}
+
+    #randomly change these fields which all test events have by default: 'status', 'warning_level'
+    global possible_statuses
+    global possible_warning_levels
+    for row in testing_incidents:
+        row.status = random.choice([status for status in possible_statuses if status != row.status])
+        row.warning_level = random.choice([warning_level for warning_level in possible_warning_levels if warning_level != row.warning_level])
+        field_updates = {}
+        field_updates["status"] = row.status
+        field_updates["warning_level"] = row.warning_level
+        updates[row.id] = field_updates
+
+    print(f"Updated the fields of {len(testing_incidents)} testing incidents")
+    return updates
+
+def unsubscribe_people_from_incidents(session, unsubscribe_ids):
+    people = db.get_all_rows(session, models.People_Incident)
+    changed_row_count = 0
+
+    for row in people:
+        updated_ids = [incident_id for incident_id in row.incident_ids if incident_id not in unsubscribe_ids]
+
+        #update row if subscription list has changed
+        if updated_ids != row.incident_ids:
+            row.incident_ids = updated_ids
+            changed_row_count += 1
+
+    print(f"{changed_row_count} people have unsubscribed from incidents")
+     

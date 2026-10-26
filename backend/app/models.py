@@ -32,7 +32,7 @@ class Incident(Base):
     address: Mapped[str | None]
     created: Mapped[datetime] #this value is created by our program in case 'expires' is null  
     #fake_incident: Mapped[Boolean | False] #this is a value we can use to track whether we've purposely created a fake incident for testing 
-    fake_incident: Mapped[bool] = mapped_column(Boolean, default=False)
+    test_incident: Mapped[bool] = mapped_column(Boolean, default=False)
 
 #these 3 tables inherit from the incident class
 #Current_Incident stores the incidents that are in progress
@@ -112,4 +112,4 @@ class SystemSettings(Base):
     notify_within_radius: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
 
     #count stuff inside the program
-    fake_incident_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False) #use this to create fake incident ids
+    test_incident_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False) #use this to create fake incident ids

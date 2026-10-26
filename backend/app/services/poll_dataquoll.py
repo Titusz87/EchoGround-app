@@ -49,7 +49,7 @@ class Incident:
             self.created = datetime.now(timezone.utc)
             
             #incidents are never fake from this source
-            self.fake_incident = False
+            self.test_incident = False
         except Exception as e:
             print("Error creating Incident object from polling")
 

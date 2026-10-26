@@ -18,7 +18,7 @@ def create_fake_people(amount):
         longitude = random.uniform(113.0, 153.6)
         id = create_person(latitude, longitude)
         ids.append(id)
-    print(f"Created {i+1} fake people with random locations in Aus")
+    print(f"Created {i+1} test people with random locations in Aus")
     return ids
 
 def create_fake_incident(_latitude, _longitude):   
@@ -31,13 +31,13 @@ def create_fake_incident(_latitude, _longitude):
         latitude = _latitude,
         longitude = _longitude,
         created = datetime.now(timezone.utc),   
-        fake_incident = True 
+        test_incident = True 
     )
     return incident
 
 def create_fake_incidents(person_id, amount):
     if amount < 1:
-        print("Cannot create less than 1 fake incident")
+        print("Cannot create less than 1 test incident")
         return
     
     with get_session() as session:
@@ -88,6 +88,6 @@ def random_location_within_radius(latitude: float, longitude: float, radius_km: 
 
 #get the available number of fake incident. then increase it by 1 for the next use
 def get_next_fake_id():
-    fake_incident_count = system_settings.get("fake_incident_count")
-    system_settings.set("fake_incident_count", fake_incident_count + 1)
-    return f"fake_incident{fake_incident_count}"
+    test_incident_count = system_settings.get("test_incident_count")
+    system_settings.set("test_incident_count", test_incident_count + 1)
+    return f"test_incident{test_incident_count}"
