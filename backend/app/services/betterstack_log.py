@@ -1,7 +1,7 @@
 # Sends Python logs (and optionally print() output) to Better Stack over plain HTTPS.
 # WHY this instead of the logtail-python package: the same HTTP call worked with curl
 # (HTTP 202), but the package's handler delivered nothing from the deployed app.
-# This version uses httpx (already in your dependencies), so there is nothing extra to install.
+# This version uses httpx, so there is nothing extra to install.
 
 import datetime
 import logging
@@ -9,7 +9,6 @@ import os
 import queue
 import sys
 import threading
-
 import httpx
 
 
