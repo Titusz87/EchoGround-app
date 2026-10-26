@@ -1,35 +1,36 @@
 from app import models
 from app.database import get_session
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import app.services.db_helpers as db
 from app.services.quadtree import Quadtree
 import numpy as np
 from sklearn.neighbors import BallTree
 from app.services.firebase import send_firebase_notification
+import app.services.system_settings as system_settings
 
 #------------------script vars-----------------------
 quadtree = None
-UNSAFE_BUSHFIRE_DISTANCE = 30
 
 #---------------------config---------------------------------
 
 verbose_debug = False
 custom_quadtree = False
 notification_fields  = ["status", "warning_level", "latitude", "longitude", "description", "address"] #people get updated when these fields change
-push_user_notifications = True
-print_user_notifications = True
+print_user_notifications = True 
 
 #-------------------------------info-----------------------------------------
 
 possible_warning_levels = ['advice', 'none', 'watch_and_act']
 possible_statuses = ['completed', 'safe', 'active', 'controlled', 'contained']
+example_incidents = ['burn_off', 'hazmat', 'bushfire', 'structure_fire', 'medical', 'vehicle_fire', 'rescue', 'grass_fire', 'flood', 'earthquake', 'vehicle_accident', 'storm', 'other', 'other_fire', 'alarm', 'tree_down']
 
 #--------------------------fn's called from other scripts-----------------------------------------------
 
 #this fn is called from the polling script
 #this is complicated. Please don't touch it!
-def update_database_incidents(incidents):
+#it can take real incidents as well as fake ones 
+def update_database_incidents(incidents, fake_incidents = False):
     with get_session() as session:
         
         print("Updating db records...")
@@ -41,7 +42,7 @@ def update_database_incidents(incidents):
         #we need to store the new incidents in a temporary table for logic later (temporary_incidents should be empty-> it is flushed at the end of this fn)
         temporary_incidents = db.convert_incidents_orm_objects(incidents, models.Temporary_Incident) 
         db.write_list_to_db(session, temporary_incidents)          
-        print(f"Added {len(temporary_incidents)} new incidents to temporary_incidents")
+        print(f"Added {len(temporary_incidents)} {"fake" if fake_incidents == True else "new"} incidents to temporary_incidents")
         print_incidents_info(session)
 
         #---------------------------Add the new incidents to current_incidents table----------------------------------
@@ -51,10 +52,10 @@ def update_database_incidents(incidents):
         #this is because the expired and completed incidents are still pulled from dataquolls API each time it polls.
         #so because the incidents that were archived (due to being expired or completed) were removed from current_incidents in the last poll...
         #they are treated as new incidents here. This means that before we insert the new incidents, we need to filter the ones that are in the archived table
-        current_incident_ids = db.get_ids_from_table(session, models.Current_Incident)
-        temporary_incident_ids = db.get_ids_from_table(session, models.Temporary_Incident) 
+        current_incident_ids = db.get_ids_from_table(session, models.Current_Incident) or []
+        temporary_incident_ids = db.get_ids_from_table(session, models.Temporary_Incident) or []
+        archived_incidents_ids = db.get_ids_from_table(session, models.Archived_Incident) or []
         new_incidents_ids = get_new_ids_safe(current_incident_ids, temporary_incident_ids)
-        archived_incidents_ids = db.get_ids_from_table(session, models.Archived_Incident)
         filtered_incident_ids = set(new_incidents_ids) - set(archived_incidents_ids)
         insert_incidents = db.get_rows_from_ids(session, models.Temporary_Incident, filtered_incident_ids)
         insert_incidents = db.convert_incidents_orm_objects(insert_incidents, models.Current_Incident)
@@ -106,11 +107,20 @@ def update_database_incidents(incidents):
         #nearby_incident_data is { person_id : [list of incidents] }
         nearby_incident_data = use_quadtree(session)
         people_to_incident_rows = db.get_all_rows(session, models.People_Incident)
+
+        #find the incidents that users aren't 'subscribed' to yet and inform them
+        push_data_new_incidents = {}
         for row in people_to_incident_rows: 
-            row.incident_ids = nearby_incident_data.get(row.id)
-        #db.write_list_to_db(session, people_to_incident_rows)        
+            fresh_incident_ids = nearby_incident_data.get(row.id, [])
+            new_incidents_near_person = list(set(fresh_incident_ids) - set(row.incident_ids))
+            push_data_new_incidents[row.id] = new_incidents_near_person
+            row.incident_ids = list(set(fresh_incident_ids))
+        notify_users(session, push_data_new_incidents)       
+        
         nearby_incident_count = sum(1 for person_id, incident_ids in nearby_incident_data.items() if incident_ids)
         print(f"{nearby_incident_count} people have nearby incidents occurring")
+        nearby_new_incidents_count = sum(1 for person_id, incident_ids in push_data_new_incidents.items() if incident_ids)
+        print(f"{nearby_new_incidents_count} people have new incidents occurring")
 
         #--------------------Search nearby_incident_data to send users updates-------------------------------- 
 
@@ -120,9 +130,9 @@ def update_database_incidents(incidents):
         
         #incident updates are a nested dictionary like this -> { incident_id: { field: new status } }
         #nearby_incident_data is { person_id : [list of incidents] }
-        if push_user_notifications:
+        if system_settings.get("push_user_notifications"):
             push_data = create_user_notification_data(nearby_incident_data, current_incident_updates)
-            people_with_updates_count =  people_with_updates_count = sum(bool(incidents) for incidents in push_data.values())
+            people_with_updates_count = sum(bool(incidents) for incidents in push_data.values())
             print(f"{people_with_updates_count} out of {len(db.get_all_rows(session, models.People))} people have incident updates")
             notify_users(session, push_data)
 
@@ -147,15 +157,26 @@ def get_expired_incidents(session, model):
     check = db.get_all_rows(session, model)
     expired = []
     time_now = datetime.now(timezone.utc)
+    stale_incident_count = 0
+    stale_incident_time_days = system_settings.get("stale_incident_time_days")
 
     for incident in check:
+        stale_incident = False
         if incident.expires is None:
-            continue
-        expiry_time = incident.expires
+            #check against our created value
+            expiry_time = incident.created + timedelta(days = stale_incident_time_days)
+            stale_incident = True
+        else:
+            expiry_time = incident.expires
+        
         if expiry_time.tzinfo is None:
             expiry_time = expiry_time.replace(tzinfo=timezone.utc)
         if expiry_time < time_now:
             expired.append(incident)
+            if stale_incident:
+                stale_incident_count += 1
+
+    print(f"{stale_incident_count} incidents without provided expiry times have gone stale (Expiry Time: {stale_incident_time_days} days)")
     return expired
 
 #check for status/warning level changes
@@ -207,15 +228,19 @@ def print_incidents_info(session):
     db.print_table_info(session, models.Archived_Incident)
 
 def get_new_ids_safe(old_ids, new_ids):
-    in_common_ids = set(old_ids) & set(new_ids)
-    truly_new_ids = set(new_ids) - in_common_ids
-    return truly_new_ids
+    old_ids = set(old_ids or [])
+    new_ids = set(new_ids or [])
+    return new_ids - old_ids
 
 def use_quadtree(session):
     current_incident_rows = db.get_all_rows(session, models.Current_Incident)
-    people = db.get_all_rows(session, models.People)
+    people = db.get_all_rows(session, models.People) or []
+    if len(people) == 0:
+        return {}
     results = {}
     print("Spatially partitioning incidents for user location updates...")
+
+    notify_within_radius = system_settings.get("notify_within_radius")
     
     if custom_quadtree:
         #extract only relevant data    
@@ -229,14 +254,14 @@ def use_quadtree(session):
         people_locations = [Quadtree.IncidentPoint(person.latitude,person.longitude,person.id) for person in people]
         results = {person.id: [] for person in people_locations}
         for person in people_locations:
-            found_incidents = quadtree.find_nearby_incidents(person,UNSAFE_BUSHFIRE_DISTANCE)
+            found_incidents = quadtree.find_nearby_incidents(person, notify_within_radius)
             results[person.id] = [incident.id for incident in found_incidents]
     else:
         #this is the solution from a balltree library 
         incident_coords = np.radians([[row.latitude, row.longitude] for row in current_incident_rows])
         people_coords = np.radians([[person.latitude, person.longitude] for person in people])
         tree = BallTree(incident_coords, metric="haversine")
-        radius_radians = UNSAFE_BUSHFIRE_DISTANCE / 6371.0
+        radius_radians = notify_within_radius / 6371.0    #the radius of the earth
         results_indices = tree.query_radius(people_coords, r=radius_radians)
         for person, incident_indices in zip(people, results_indices):
             results[person.id] = [current_incident_rows[i].id for i in incident_indices]
