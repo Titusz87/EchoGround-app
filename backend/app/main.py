@@ -69,7 +69,7 @@ app = FastAPI(
 # Explicitly bind middleware directly onto the app container instance
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://titusz87.github.io", "http://localhost"], # Trust your GitHub Pages production domain and local workspace
+    allow_origins=["https://titusz87.github.io", "http://localhost"], # Trust GitHub Pages production domain and local workspace
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"], # Explicitly declare permitted preflight methods
     allow_headers=["*"],
@@ -89,7 +89,7 @@ app.include_router(registration_router)
 #the root of the API
 @app.get("/")
 def root():
-    return {"message": "Hello from CountryReady!"}
+    return {"message": "Hello from EchoGround!"}
 
 #can do database stuff here
 def do_additional_db_jobs():
