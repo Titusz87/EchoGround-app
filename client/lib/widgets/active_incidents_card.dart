@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../services/database_helper.dart'; // Adjust path according to your folder layout
+import '../services/database_helper.dart';
 
 class ActiveIncidentsCard extends StatelessWidget {
   const ActiveIncidentsCard({super.key});
 
-  // Maps the incoming warning level string to your custom visual emojis
+  // Maps the incoming warning level string to custom visual emojis
   String _getIconForLevel(String? level) {
     if (level == null) return '⚪';
     final normalized = level.toLowerCase();
