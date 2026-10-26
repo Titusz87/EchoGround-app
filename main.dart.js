@@ -7667,7 +7667,7 @@ return A.A($async$Ju,r)},
 a6P(a,b,c){return A.aGr(a,b,c)},
 aGr(a,b,c){var s=0,r=A.B(t.H),q=1,p=[],o,n,m,l,k,j,i
 var $async$a6P=A.C(function(d,e){if(d===1){p.push(e)
-s=q}for(;;)switch(s){case 0:j=A.h5("https://echoground-backend.fastapicloud.dev/create-person")
+s=q}for(;;)switch(s){case 0:j=A.h5("https://echoground-backend.fastapicloud.dev/person/create")
 q=3
 m=t.N
 l=A.a1(["Content-Type","application/json"],m,m)
