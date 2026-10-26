@@ -14,21 +14,12 @@ from app.services.incident_sync import custom_quadtree
 from app.services.firebase import initialise_firebase, firebase_test_notification
 from app.database import connect_to_db, get_session
 from app.routers.registration import router as registration_router
+from app.routers.system_testing import router as system_testing_router
 #from app.routers.something_else import router as something_else
 from app.services import db_helpers as db
 from app import models
-from app.services.create_db_rows import create_random_people
-
-#--------------config vars------------------------------------------
-
-auto_poll = False
-poll_on_startup = True
-auto_poll_interval = 15
-test_firebase_notification_system = False
-flush_db_models = []
-create_db_people = 0
-
-#-----------------------------------------------------
+from app.services.create_fake_data import create_fake_people
+from app.services import system_settings as system_settings
 
 #--------------Better Stack logging---------------------------------  
 
@@ -45,16 +36,17 @@ async def lifespan(app: FastAPI):
     firebase_app = initialise_firebase()
     app.state.firebase_app = firebase_app
     connect_to_db()
+    system_settings.initialise_system_settings() #this can only be called after connecting to the db 
     setup_polling()
     do_additional_db_jobs()
     do_additional_firebase_jobs()
-    if poll_on_startup:
+    if system_settings.get("poll_on_startup"):
         await poll_all_states() #poll immediately on startup for testing
     
     #schedule polling (and database sync/ push notifications)
     scheduler = AsyncIOScheduler()
-    if auto_poll:
-        scheduler.add_job(poll_all_states, "interval", minutes=auto_poll_interval)
+    if system_settings.get("auto_poll"):
+        scheduler.add_job(poll_all_states, "interval", minutes=system_settings.get("auto_poll_interval"))
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -85,6 +77,7 @@ async def preflight_handler(request_response: Response):
 
 # Adds sub-routers AFTER the interceptor handler is established
 app.include_router(registration_router)
+app.include_router(system_testing_router)
 
 #the root of the API
 @app.get("/")
@@ -95,18 +88,11 @@ def root():
 def do_additional_db_jobs():
     with get_session() as session:
 
-        #options to flush tables
-        if flush_db_models:
-            for model in flush_db_models:
-                db.flush_db_table(session, model)
-                db.print_table_info(session, model)
-
-        #option to randomly create db data
-        if create_db_people > 0:
-            create_random_people(create_db_people)
+        #nothing needed here at the moment
 
         session.commit()
 
 def do_additional_firebase_jobs():
-    if test_firebase_notification_system:
+    if system_settings.get("test_firebase_notification_system"):
         firebase_test_notification()
+
