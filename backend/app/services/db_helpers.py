@@ -27,7 +27,7 @@ def convert_incidents_orm_objects(incidents, incident_type):
             description = incident.description, 
             address = incident.address,
             created = incident.created,
-            fake_incident = incident.fake_incident
+            test_incident = incident.test_incident
         )
         translated.append(current_incident)
     return translated
