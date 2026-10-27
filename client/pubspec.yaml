@@ -43,6 +43,7 @@ dependencies:
   geolocator: ^14.1.2
   sqflite_common_ffi: ^2.4.5
   sqflite_common_ffi_web: ^1.2.0
+  bigdatacloud_reverse_geocode_client: ^1.0.2
 
 dev_dependencies:
   flutter_test:

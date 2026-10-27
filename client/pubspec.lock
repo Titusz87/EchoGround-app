@@ -41,6 +41,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
+  bigdatacloud_reverse_geocode_client:
+    dependency: "direct main"
+    description:
+      name: bigdatacloud_reverse_geocode_client
+      sha256: bc4a812f683588102f4a97434fe8f8e45b04ee5433394f9895e09dab3ad5bb36
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.2"
   boolean_selector:
     dependency: transitive
     description:
