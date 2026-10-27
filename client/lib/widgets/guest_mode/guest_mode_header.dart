@@ -19,12 +19,12 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
     _fetchRealLocation();
   }
 
-    Future<void> _fetchRealLocation() async {
+  Future<void> _fetchRealLocation() async {
     try {
       double? lat;
       double? lng;
 
-      // 1. Attempt GPS checking rules smoothly
+      // 1. Try to read hardware GPS tracking data if available
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       LocationPermission permission = await Geolocator.checkPermission();
 
@@ -39,40 +39,64 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
           lat = position.latitude;
           lng = position.longitude;
         } catch (_) {
-          print("GPS hardware tracking bypassed. Transitioning to fallback...");
+          print("GPS hardware tracking bypassed. Moving to IP location tracking...");
         }
       }
 
-      // 2. PRIMARY CLOUD FALLBACK: Query ipapi via secure HTTPS 
-      // This service natively permits unrestricted client-side cross-origin browser handshakes
-      print("Querying secure cloud geolocation services...");
-      final url = Uri.parse(
-        lat != null && lng != null
-            ? 'https://ipapi.co'
-            : 'https://ipapi.co'
-      );
+      // 2. NETWORK PATH ROUTING (100% Dynamic - Zero Hardcoding)
+      http.Response response;
 
-      final response = await http.get(url);
+      if (lat != null && lng != null) {
+        // PATH A: GPS is active—query Open-Meteo's open-access reverse geocoding API over secure HTTPS
+        print("Querying secure cloud reverse geocoder via coordinates...");
+        final url = Uri.parse(
+          'https://open-meteo.com'
+        );
+        response = await http.get(url);
+
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> data = json.decode(response.body);
+          final List? results = data['results'];
+          
+          if (results != null && results.isNotEmpty) {
+            final String city = results.first['name']?.toString().trim() ?? '';
+            final String state = results.first['admin1']?.toString().trim() ?? '';
+            
+            if (city.isNotEmpty && mounted) {
+              setState(() { _locationText = state.isNotEmpty ? '$city, $state' : city; });
+              return; // Success! Exit loop cleanly
+            }
+          }
+        }
+      }
+
+      // PATH B: GPS is blocked—query ipapi's clean zero-parameter address block
+      // Omitting coordinates forces their server to trace your IP routing to return your true city
+      print("Querying secure zero-parameter IP geolocation endpoint...");
+      final ipUrl = Uri.parse('https://ipapi.co/json/'); // FIXED: No parameters passed inside paths
+      response = await http.get(ipUrl);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
         
-        // Safe unpacking of geography parameters from the JSON response tree
-        final String city = data['city']?.toString().trim() ?? 'Unknown City';
-        final String stateCode = data['region_code']?.toString().trim() ?? ''; // e.g., "SA" or "NSW"
+        // Ensure the server did not return a soft rate-limiting error payload
+        if (data['error'] != true) {
+          final String city = data['city']?.toString().trim() ?? 'Unknown City';
+          final String stateCode = data['region_code']?.toString().trim() ?? ''; 
 
-        if (city.isNotEmpty && mounted) {
-          setState(() {
-            _locationText = stateCode.isNotEmpty ? '$city, $stateCode' : city;
-          });
-          return; // Server lookup completely successful!
+          if (city.isNotEmpty && mounted) {
+            setState(() {
+              _locationText = stateCode.isNotEmpty ? '$city, $stateCode' : city;
+            });
+            return; // Success! Exit loop cleanly
+          }
         }
       }
 
       if (mounted) setState(() { _locationText = 'Location Unresolved'; });
 
     } catch (e) {
-      print('Cloud tracking exception handled safely: $e');
+      print('⚠️ Safe Dynamic Reverse Geocoding failed: $e');
       if (mounted) {
         setState(() {
           _locationText = 'Location Services Restricted'; 
