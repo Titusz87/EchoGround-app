@@ -47128,7 +47128,7 @@ s=B.e.f1(a)
 r=s.length
 if(r===0)return"Unknown"
 if(r===1)return s.toUpperCase()
-return s.toUpperCase()+B.e.c7(s,1).toLowerCase()},
+return s[0].toUpperCase()+B.e.c7(s,1).toLowerCase()},
 am6(a){if(B.e.f1(a).length===0)return""
 return new A.dY(new A.aT(A.b(a.split("_"),t.s),new A.atM(),t.Hd),new A.atN(),t.lJ).bw(0," ")},
 gaoO(){var s,r,q,p,o,n=this.a.c
@@ -47162,7 +47162,7 @@ A.atM.prototype={
 $1(a){return a.length!==0},
 $S:33}
 A.atN.prototype={
-$1(a){return a.toUpperCase()+B.e.c7(a,1).toLowerCase()},
+$1(a){return a[0].toUpperCase()+B.e.c7(a,1).toLowerCase()},
 $S:48}
 A.atP.prototype={
 $1(a){var s=a.b
