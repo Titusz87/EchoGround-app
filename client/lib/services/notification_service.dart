@@ -69,15 +69,27 @@ class NotificationService {
     }
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('Foreground dataset update received: ${message.data}');
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message.data['body'] ?? 'New Incident Updated Nearby!'),
-            backgroundColor: Colors.teal,
-          ),
-        );
+      try {
+        if (message.data != null) {
+          // 1. Force convert the raw web object tree into a native, type-safe Dart Map
+          final Map<String, dynamic> cleanData = Map<String, dynamic>.from(message.data);
+          
+          print('Foreground dataset update received and sanitized: $cleanData');
+          
+          if (context.mounted) {
+            // 2. Extract values safely from the clean, native Dart Map
+            final snackBarText = cleanData['body']?.toString() ?? 'New Incident Updated Nearby!';
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(snackBarText),
+                backgroundColor: Colors.teal,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        print('Intercepted a snackbar payload processing issue safely: $e');
       }
     });
   }
