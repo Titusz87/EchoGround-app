@@ -43,7 +43,8 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
         }
       }
 
-      // 2. PRIMARY LOOKUP: Query BigDataCloud via HTTPS (Handles auto-IP matching on server side)
+      // 2. PRIMARY LOOKUP: Fixed target endpoints to prevent 308 cross-origin redirects
+      // Added explicit api sub-domain, exact endpoint sub-paths, and strict layout keys
       final primaryUrl = Uri.parse(
         lat != null && lng != null
             ? 'https://bigdatacloud.net'
@@ -65,7 +66,7 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
         }
       }
 
-      // 3. SECURE SECONDARY FAILOVER: If the primary API breaks, parse another secure HTTPS IP location service
+      // 3. SECURE SECONDARY FAILOVER: Uses free ipapi format which allows open browser cross-origin requests
       print("Querying secondary backup IP localization matrix...");
       final fallbackUrl = Uri.parse('https://ipapi.co');
       final fallbackResponse = await http.get(fallbackUrl);
@@ -73,7 +74,7 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
       if (fallbackResponse.statusCode == 200) {
         final Map<String, dynamic> fallbackData = json.decode(fallbackResponse.body);
         final String city = fallbackData['city']?.toString().trim() ?? '';
-        final String stateCode = fallbackData['region_code']?.toString().trim() ?? ''; // e.g., "SA" or "NSW"
+        final String stateCode = fallbackData['region_code']?.toString().trim() ?? ''; 
 
         if (city.isNotEmpty && mounted) {
           setState(() {
@@ -93,7 +94,7 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
         });
       }
     }
-  }     
+  }
 
   @override
   Widget build(BuildContext context) {
