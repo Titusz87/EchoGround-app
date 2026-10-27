@@ -19,12 +19,12 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
     _fetchRealLocation();
   }
 
-       Future<void> _fetchRealLocation() async {
+  Future<void> _fetchRealLocation() async {
     try {
       double? lat;
       double? lng;
 
-      // 1. Check if hardware tracking services are available on the machine
+      // 1. Try to read GPS tracking sensors if allowed by the user
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       LocationPermission permission = await Geolocator.checkPermission();
 
@@ -32,59 +32,68 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
           permission != LocationPermission.denied && 
           permission != LocationPermission.deniedForever) {
         try {
-          // If enabled, grab precision coordinates from GPS
           Position position = await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-          ).timeout(const Duration(seconds: 3)); // Fast timeout if sensor hangs
+          ).timeout(const Duration(seconds: 2));
           
           lat = position.latitude;
           lng = position.longitude;
         } catch (_) {
-          // Fall back gracefully to keyless endpoint failover if sensor times out
-          print("GPS sensor timed out. Using native endpoint IP detection...");
+          print("GPS sensor timed out. Moving to network IP tracking...");
         }
       }
 
-      // 2. Query BigDataCloud via HTTPS (Prevents Mixed Content Blocks completely)
-      // Note: If lat and lng are null, BigDataCloud automatically falls back to your 
-      // network IP location on their servers, returning your true city instantly!
-      final url = Uri.parse(
+      // 2. PRIMARY LOOKUP: Query BigDataCloud via HTTPS (Handles auto-IP matching on server side)
+      final primaryUrl = Uri.parse(
         lat != null && lng != null
             ? 'https://bigdatacloud.net'
             : 'https://bigdatacloud.net'
       );
 
-      final response = await http.get(url);
+      final response = await http.get(primaryUrl);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
-
-        // 3. Extract the real City/Locality and State subdivision attributes
-        final String city = data['city']?.toString().trim() ?? 
-                            data['locality']?.toString().trim() ?? 
-                            'Unknown City';
+        final String city = data['city']?.toString().trim() ?? data['locality']?.toString().trim() ?? '';
         final String state = data['principalSubdivision']?.toString().trim() ?? '';
 
-        if (mounted && city.isNotEmpty) {
+        if (city.isNotEmpty && mounted) {
           setState(() {
             _locationText = state.isNotEmpty ? '$city, $state' : city;
           });
-          return;
+          return; // Primary network lookup succeeded!
         }
       }
-      
-      if (mounted) setState(() { _locationText = 'Location Services Restricted'; });
+
+      // 3. SECURE SECONDARY FAILOVER: If the primary API breaks, parse another secure HTTPS IP location service
+      print("Querying secondary backup IP localization matrix...");
+      final fallbackUrl = Uri.parse('https://ipapi.co');
+      final fallbackResponse = await http.get(fallbackUrl);
+
+      if (fallbackResponse.statusCode == 200) {
+        final Map<String, dynamic> fallbackData = json.decode(fallbackResponse.body);
+        final String city = fallbackData['city']?.toString().trim() ?? '';
+        final String stateCode = fallbackData['region_code']?.toString().trim() ?? ''; // e.g., "SA" or "NSW"
+
+        if (city.isNotEmpty && mounted) {
+          setState(() {
+            _locationText = stateCode.isNotEmpty ? '$city, $stateCode' : city;
+          });
+          return; // Secondary network lookup succeeded!
+        }
+      }
+
+      if (mounted) setState(() { _locationText = 'Location Unresolved'; });
 
     } catch (e) {
-      print('Safe Dynamic Reverse Geocoding failed: $e');
+      print('All dynamic location tracking paths blocked by system: $e');
       if (mounted) {
-        // Fallback default matches your current machine's testing station position
         setState(() {
-          _locationText = 'Adelaide, SA'; 
+          _locationText = 'Location Services Restricted'; 
         });
       }
     }
-  }
+  }     
 
   @override
   Widget build(BuildContext context) {
