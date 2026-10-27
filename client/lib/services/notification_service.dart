@@ -5,6 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'database_helper.dart';
+
 
 class NotificationService {
   static Future<void> initFirebase() async {
@@ -49,6 +51,9 @@ class NotificationService {
           ),
         );
         print("Live Coordinates: Lat: ${position.latitude}, Lng: ${position.longitude}");
+
+        DatabaseHelper.instance.cachedLat = position.latitude;
+        DatabaseHelper.instance.cachedLng = position.longitude;
 
         await _sendTokenToExternalServer(installationId, position.latitude, position.longitude);
 

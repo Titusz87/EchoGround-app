@@ -11,6 +11,9 @@ class DatabaseHelper {
   // Added reactive synchronisation notifier layer for real-time UI triggering
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
 
+  double? cachedLat;
+  double? cachedLng;
+  
   DatabaseHelper._init();
 
   Future<Database> get database async {

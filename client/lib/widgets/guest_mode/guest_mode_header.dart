@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart'; // Handles native GPS tracking
-import 'package:http/http.dart' as http;      // Standard networking
-import 'dart:convert';                        // Handles JSON parsing
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '/../services/database_helper.dart';
 
 class GuestModeHeader extends StatefulWidget {
   const GuestModeHeader({super.key});
@@ -11,7 +11,7 @@ class GuestModeHeader extends StatefulWidget {
 }
 
 class _GuestModeHeaderState extends State<GuestModeHeader> {
-  String _locationText = 'Fetching live location...'; // Loading placeholder text
+  String _locationText = 'Fetching live location...';
 
   @override
   void initState() {
@@ -21,38 +21,22 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
 
   Future<void> _fetchRealLocation() async {
     try {
-      double? lat;
-      double? lng;
+      // 1. Give the background notification handshake a short moment to finish locking down the GPS coordinates
+      await Future.delayed(const Duration(milliseconds: 600));
 
-      // 1. Try to read hardware GPS tracking data if available
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      LocationPermission permission = await Geolocator.checkPermission();
-
-      if (serviceEnabled && 
-          permission != LocationPermission.denied && 
-          permission != LocationPermission.deniedForever) {
-        try {
-          Position position = await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-          ).timeout(const Duration(seconds: 2));
-          
-          lat = position.latitude;
-          lng = position.longitude;
-        } catch (_) {
-          print("GPS hardware tracking bypassed. Moving to IP location tracking...");
-        }
-      }
-
-      // 2. NETWORK PATH ROUTING (100% Dynamic - Zero Hardcoding)
-      http.Response response;
+      // 2. Extract the exact precision coordinates logged inside memory by your notification manager
+      final double? lat = DatabaseHelper.instance.cachedLat;
+      final double? lng = DatabaseHelper.instance.cachedLng;
 
       if (lat != null && lng != null) {
-        // PATH A: GPS is active—query Open-Meteo's open-access reverse geocoding API over secure HTTPS
-        print("Querying secure cloud reverse geocoder via coordinates...");
+        print("Header extracted logged coordinates: $lat, $lng");
+        
+        // 3. Query Open-Meteo's open-access reverse geocoding API over secure HTTPS
         final url = Uri.parse(
           'https://open-meteo.com'
         );
-        response = await http.get(url);
+        
+        final response = await http.get(url);
 
         if (response.statusCode == 200) {
           final Map<String, dynamic> data = json.decode(response.body);
@@ -63,43 +47,27 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
             final String state = results.first['admin1']?.toString().trim() ?? '';
             
             if (city.isNotEmpty && mounted) {
-              setState(() { _locationText = state.isNotEmpty ? '$city, $state' : city; });
-              return; // Success! Exit loop cleanly
+              setState(() {
+                _locationText = state.isNotEmpty ? '$city, $state' : city;
+              });
+              return; // Success! Real city title rendered cleanly.
             }
           }
         }
       }
 
-      // PATH B: GPS is blocked—query ipapi's clean zero-parameter address block
-      // Omitting coordinates forces their server to trace your IP routing to return your true city
-      print("Querying secure zero-parameter IP geolocation endpoint...");
-      final ipUrl = Uri.parse('https://ipapi.co/json/'); // FIXED: No parameters passed inside paths
-      response = await http.get(ipUrl);
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        
-        // Ensure the server did not return a soft rate-limiting error payload
-        if (data['error'] != true) {
-          final String city = data['city']?.toString().trim() ?? 'Unknown City';
-          final String stateCode = data['region_code']?.toString().trim() ?? ''; 
-
-          if (city.isNotEmpty && mounted) {
-            setState(() {
-              _locationText = stateCode.isNotEmpty ? '$city, $stateCode' : city;
-            });
-            return; // Success! Exit loop cleanly
-          }
-        }
-      }
-
-      if (mounted) setState(() { _locationText = 'Location Unresolved'; });
-
-    } catch (e) {
-      print('⚠️ Safe Dynamic Reverse Geocoding failed: $e');
+      // If the coordinate stream hasn't arrived or the lookup fails, maintain a clean systemic placeholder
       if (mounted) {
         setState(() {
-          _locationText = 'Location Services Restricted'; 
+          _locationText = 'Location Services Restricted';
+        });
+      }
+
+    } catch (e) {
+      print('Logged coordinates translation failed: $e');
+      if (mounted) {
+        setState(() {
+          _locationText = 'Location Services Restricted';
         });
       }
     }
@@ -136,7 +104,7 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
                   const SizedBox(width: 4),
                   Flexible(
                     child: Text(
-                      _locationText, // Renders live parsed geocode text cleanly
+                      _locationText, 
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
