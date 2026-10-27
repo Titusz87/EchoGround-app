@@ -19,12 +19,12 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
     _fetchRealLocation();
   }
 
-  Future<void> _fetchRealLocation() async {
+    Future<void> _fetchRealLocation() async {
     try {
       double? lat;
       double? lng;
 
-      // 1. Try to read GPS tracking sensors if allowed by the user
+      // 1. Attempt GPS checking rules smoothly
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       LocationPermission permission = await Geolocator.checkPermission();
 
@@ -39,55 +39,40 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
           lat = position.latitude;
           lng = position.longitude;
         } catch (_) {
-          print("GPS sensor timed out. Moving to network IP tracking...");
+          print("GPS hardware tracking bypassed. Transitioning to fallback...");
         }
       }
 
-      // 2. PRIMARY LOOKUP: Fixed target endpoints to prevent 308 cross-origin redirects
-      // Added explicit api sub-domain, exact endpoint sub-paths, and strict layout keys
-      final primaryUrl = Uri.parse(
+      // 2. PRIMARY CLOUD FALLBACK: Query ipapi via secure HTTPS 
+      // This service natively permits unrestricted client-side cross-origin browser handshakes
+      print("Querying secure cloud geolocation services...");
+      final url = Uri.parse(
         lat != null && lng != null
-            ? 'https://bigdatacloud.net'
-            : 'https://bigdatacloud.net'
+            ? 'https://ipapi.co'
+            : 'https://ipapi.co'
       );
 
-      final response = await http.get(primaryUrl);
+      final response = await http.get(url);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
-        final String city = data['city']?.toString().trim() ?? data['locality']?.toString().trim() ?? '';
-        final String state = data['principalSubdivision']?.toString().trim() ?? '';
-
-        if (city.isNotEmpty && mounted) {
-          setState(() {
-            _locationText = state.isNotEmpty ? '$city, $state' : city;
-          });
-          return; // Primary network lookup succeeded!
-        }
-      }
-
-      // 3. SECURE SECONDARY FAILOVER: Uses free ipapi format which allows open browser cross-origin requests
-      print("Querying secondary backup IP localization matrix...");
-      final fallbackUrl = Uri.parse('https://ipapi.co');
-      final fallbackResponse = await http.get(fallbackUrl);
-
-      if (fallbackResponse.statusCode == 200) {
-        final Map<String, dynamic> fallbackData = json.decode(fallbackResponse.body);
-        final String city = fallbackData['city']?.toString().trim() ?? '';
-        final String stateCode = fallbackData['region_code']?.toString().trim() ?? ''; 
+        
+        // Safe unpacking of geography parameters from the JSON response tree
+        final String city = data['city']?.toString().trim() ?? 'Unknown City';
+        final String stateCode = data['region_code']?.toString().trim() ?? ''; // e.g., "SA" or "NSW"
 
         if (city.isNotEmpty && mounted) {
           setState(() {
             _locationText = stateCode.isNotEmpty ? '$city, $stateCode' : city;
           });
-          return; // Secondary network lookup succeeded!
+          return; // Server lookup completely successful!
         }
       }
 
       if (mounted) setState(() { _locationText = 'Location Unresolved'; });
 
     } catch (e) {
-      print('All dynamic location tracking paths blocked by system: $e');
+      print('Cloud tracking exception handled safely: $e');
       if (mounted) {
         setState(() {
           _locationText = 'Location Services Restricted'; 
