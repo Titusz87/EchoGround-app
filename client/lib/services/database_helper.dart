@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, ValueNotifier; 
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
@@ -7,6 +7,9 @@ import 'package:path/path.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
+
+  // Added reactive synchronisation notifier layer for real-time UI triggering
+  final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
 
   DatabaseHelper._init();
 
@@ -50,7 +53,7 @@ class DatabaseHelper {
     ''');
   }
 
-    // Updated type-safe insert method to neutralize empty strings and null value fields
+  // Updated type-safe insert method to neutralize empty strings and null value fields
   Future<void> insertNotification(Map<String, dynamic> dataPayload) async {
     final db = await instance.database;
 
@@ -61,7 +64,7 @@ class DatabaseHelper {
       return str.isEmpty ? fallback : str;
     }
 
-    // Safely structure and extract types matching your incoming live datasets
+    // Safely structure and extract types matching of incoming live datasets
     final Map<String, dynamic> row = {
       'id': sanitizeString(dataPayload['id'], fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}'),
       'event_type': sanitizeString(dataPayload['event_type'], fallback: 'General Incident'),
@@ -96,11 +99,14 @@ class DatabaseHelper {
         row, 
         conflictAlgorithm: ConflictAlgorithm.replace
       );
+
+      //  BROADCAST LAYER ACTIVE: Increments to trigger active listener views instantly on write
+      syncNotifier.value++;
+
     } catch (e) {
       print("Database Write Failure Intercepted Safely: $e");
     }
   }
-
 
   Future<List<Map<String, dynamic>>> fetchAllNotifications() async {
     final db = await instance.database;
