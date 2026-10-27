@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../map_screen.dart';
-import '../../widgets/community_leader/active_incidents_card.dart';
+import '../../widgets/active_incidents_card.dart';
 import '../../widgets/community_leader/household_status_card.dart';
 import '../../widgets/community_leader/community_alert_card.dart';
 import '../../widgets/community_leader/community_tasks_card.dart';

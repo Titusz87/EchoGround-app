@@ -87,7 +87,7 @@ class NotificationService {
     const String backendBaseUrl = String.fromEnvironment('BACKEND_URL');
     
     // 2. UPDATED: Target Evan's explicit subpath address channel
-    final url = Uri.parse('$backendBaseUrl/create-person');
+    final url = Uri.parse('$backendBaseUrl/person/create');
     
     try {
       final response = await http.post(
