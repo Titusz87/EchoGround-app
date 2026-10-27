@@ -55,24 +55,24 @@ class People(Base):
     fcm_token: Mapped[str | None] = mapped_column(String, unique=True, nullable=True) #can be null because the user might not allow notifications immediately  
     latitude: Mapped[float] 
     longitude: Mapped[float]  
-    household_id: Mapped[int | None] = mapped_column(ForeignKey("households.id"), nullable=True)                        
-    community_leader_id: Mapped[int | None] = mapped_column(ForeignKey("community_leaders.id"), nullable=True)
 
 #stores info of community leaders  
 class Community_Leader(Base):
     __tablename__ = "community_leaders"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True) #auto generate integer ids 
-    name: Mapped[str]
-    latitude: Mapped[float] 
-    longitude: Mapped[float] 
+    id: Mapped[int] = mapped_column(ForeignKey("people.id"), primary_key=True) #a person can also be a household and/or a community leader
+    first_name: Mapped[str]
+    phone: Mapped[str]
+    password: Mapped[str | None] = mapped_column(String)
 
 #stores info of individual households (users)
 class Household(Base):
     __tablename__ = "households"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str]
-    latitude: Mapped[float] 
-    longitude: Mapped[float] 
+    id: Mapped[int] = mapped_column(ForeignKey("people.id"), primary_key=True)
+    last_name: Mapped[str]
+    phone: Mapped[str]
+    count: Mapped[int | None] = mapped_column(Integer, default=None)
+    password: Mapped[str | None] = mapped_column(String)
+
 
 #------------------profile classes------------------------------------------------------------
 
@@ -94,8 +94,10 @@ class SystemSettings(Base):
     __tablename__ = "system_settings"
     key: Mapped[str] = mapped_column(String, primary_key=True)
 
-    #incidents sync occurs after dataquoll is polled 
+    #db functionality
     write_to_db: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    delete_all_tables: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    fcm_token_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False) #track whether users need their fcm token to be correct when doing stuff to db
 
     #controls polling behavior
     auto_poll: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

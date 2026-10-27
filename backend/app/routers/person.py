@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from app.services.registration import create_person
 from app.database import get_session
 from app import models
+from app.services.login import verify_person_creds
 # Commented out for local integration validation tests
 # from app.services.firebase import verify_app_check
 
@@ -35,9 +36,39 @@ def register_person(data: StartupRequest):
         "person_id": person_id
     }
 
-#TODO this needs to be safe (if a network failure happens the device can't create 2 people entries)
 
 #-----------------------------------------------------------------------------------------
+#receive the users id and fcm token to verify their location update
+class LocationUpdateRequest(BaseModel):
+    latitude: float
+    longitude: float
+    id: int
+    fcm_token: str
+#the PATCH that updates location of a person 
+@router.patch("/person/update-location")
+def update_location(data: LocationUpdateRequest):
+    
+    status = verify_person_creds(data.id, data.fcm_token)
+    if status is True:
+        with get_session() as session:
+            person = session.get(models.People, data.id)
+            person.latitude = data.latitude
+            person.longitude = data.longitude
+            session.commit()
+        return {
+            "status": "ok",
+            "message": f"Location of person {data.id} updated successfully",
+        }
+
+    return {
+        "status": "failure",
+        "message": f"{status}",
+    }
+    
+    
+   
+#----------------------------------------------------------------------------------
+
 
 
 # ADDED: This is the route that runs to grab all active hazards standing near a specific device index block

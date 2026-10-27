@@ -63,3 +63,7 @@ def get_db():
         yield session
     finally:
         session.close()
+
+def recreate_all_tables():
+    Base.metadata.create_all(bind=engine)
+    print("Recreated all tables")
