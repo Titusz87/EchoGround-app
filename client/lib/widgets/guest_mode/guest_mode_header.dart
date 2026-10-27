@@ -19,16 +19,37 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
     _fetchRealLocation();
   }
 
-  Future<void> _fetchRealLocation() async {
+   Future<void> _fetchRealLocation() async {
     try {
-      // 1. Fetch real hardware device coordinates safely
+      // 1. VERIFY PERMISSIONS: Check if the browser allows location tracking
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() { _locationText = 'Location Services Disabled'; });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() { _locationText = 'Permission Denied'; });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() { _locationText = 'Permissions Blocked in Settings'; });
+        return;
+      }
+
+      // 2. Fetch real hardware device coordinates safely
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
         ),
       );
 
-      // 2. Query BigDataCloud's official free reverse geocoding API directly via HTTP
+      // 3. Query BigDataCloud's official free reverse geocoding API directly via HTTP
       final url = Uri.parse(
         'https://bigdatacloud.net?'
         'latitude=${position.latitude}&longitude=${position.longitude}&localityLanguage=en'
@@ -39,7 +60,6 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
 
-        // 3. Extract the clean City/Locality and State subdivision attributes
         final String city = data['city']?.toString().trim() ?? 
                             data['locality']?.toString().trim() ?? 
                             'Unknown City';
@@ -50,8 +70,6 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
             _locationText = state.isNotEmpty ? '$city, $state' : city;
           });
         }
-      } else {
-        throw Exception('Server returned response code: ${response.statusCode}');
       }
     } catch (e) {
       print('⚠️ Bulletproof Reverse Geocoding failed: $e');
