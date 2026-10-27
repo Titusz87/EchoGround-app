@@ -2,6 +2,7 @@ from sqlalchemy import select, inspect, delete
 from app.database import get_session
 from app.database import engine
 from app.models import Base
+from app import models
 
 #-------config-------------------------------------
 
@@ -113,6 +114,21 @@ def flush_all_tables(session):
         print("Wiped all data from all tables")
     except Exception as e:
         print(f"Failed to wipe data from all tables: {e}")
+
+#delete the actual tables
+# Delete all tables except system_settings
+def delete_all_tables():
+    try:
+        with get_session() as session:
+            bind = session.get_bind()
+
+            #exclude the system settings table
+            tables_to_drop = [table for table in Base.metadata.sorted_tables if table.name != models.SystemSettings.__tablename__]
+            Base.metadata.drop_all(bind=bind, tables=tables_to_drop)
+            print("Deleted all tables except system_settings")
+
+    except Exception as e:
+        print(f"Failed to delete tables: {e}")
 
 #return any wanted info about tables for debugging
 def print_table_info(session, model):

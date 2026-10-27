@@ -8,6 +8,7 @@ def initialise_system_settings():
 
         #create default settings if the row doesn't exist
         settings = session.get(models.SystemSettings, "main")
+        print("Successfully loaded system settings")
         if settings is None:
             session.add(models.SystemSettings(key="main"))
             session.commit()

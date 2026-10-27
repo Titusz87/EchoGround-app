@@ -12,14 +12,16 @@ from app.services.betterstack_log import setup_betterstack
 from app.services.poll_dataquoll import poll_all_states, setup_polling
 from app.services.incident_sync import custom_quadtree
 from app.services.firebase import initialise_firebase, firebase_test_notification
-from app.database import connect_to_db, get_session
-from app.routers.registration import router as registration_router
+from app.database import connect_to_db, get_session, recreate_all_tables
+from app.routers.person import router as person_router
 from app.routers.system_testing import router as system_testing_router
-#from app.routers.something_else import router as something_else
+from app.routers.household import router as household_router
+from app.routers.community_leader import router as community_leader
 from app.services import db_helpers as db
 from app import models
 from app.services.create_fake_data import create_fake_people
 from app.services import system_settings as system_settings
+
 
 #--------------Better Stack logging---------------------------------  
 
@@ -37,6 +39,9 @@ async def lifespan(app: FastAPI):
     app.state.firebase_app = firebase_app
     connect_to_db()
     system_settings.initialise_system_settings() #this can only be called after connecting to the db 
+    if system_settings.get("delete_all_tables"): #wipe tables if we want
+        db.delete_all_tables()  
+        recreate_all_tables()                     
     setup_polling()
     do_additional_db_jobs()
     do_additional_firebase_jobs()
@@ -76,8 +81,10 @@ async def preflight_handler(request_response: Response):
     return request_response
 
 # Adds sub-routers AFTER the interceptor handler is established
-app.include_router(registration_router)
+app.include_router(person_router)
 app.include_router(system_testing_router)
+app.include_router(household_router)
+app.include_router(community_leader)
 
 #the root of the API
 @app.get("/")
