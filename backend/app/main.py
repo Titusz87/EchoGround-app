@@ -58,7 +58,7 @@ app = FastAPI(
     docs_url="/docs"
 )
 
-# Explicitly bind middleware directly onto the app container instance
+# Explicitly bind middleware directly onto the app container instance 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://titusz87.github.io", "http://localhost"], # Trust GitHub Pages production domain and local workspace
