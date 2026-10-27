@@ -12,7 +12,7 @@ class LeaderDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CountryReady.ai'),
+        title: const Text('Community Leader Dashboard'),
         centerTitle: true,
       ),
 
