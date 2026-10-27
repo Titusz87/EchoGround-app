@@ -1,0 +1,1 @@
+enum IncidentSource { test, official, community, unknown }
