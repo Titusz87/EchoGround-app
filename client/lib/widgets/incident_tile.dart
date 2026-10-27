@@ -31,20 +31,22 @@ class _IncidentTileState extends State<IncidentTile> {
     return '🟡';
   }
 
+  // FIXED: Capitalizes only the first letter, avoiding whole-string text doubling glitches
   String _capitalize(String? text) {
     if (text == null) return 'Unknown';
     final trimmed = text.toString().trim();
     if (trimmed.isEmpty) return 'Unknown';
     if (trimmed.length == 1) return trimmed.toUpperCase();
-    return trimmed.toUpperCase() + trimmed.substring(1).toLowerCase();
+    return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
   }
 
+  // FIXED: Capitalizes only the first letter of each word token slice correctly
   String _prettyKey(String key) {
     if (key.trim().isEmpty) return '';
     return key
         .split('_')
         .where((w) => w.isNotEmpty)
-        .map((w) => w.toUpperCase() + w.substring(1).toLowerCase())
+        .map((w) => w[0].toUpperCase() + w.substring(1).toLowerCase())
         .join(' ');
   }
 
