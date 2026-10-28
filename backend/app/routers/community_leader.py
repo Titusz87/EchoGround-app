@@ -4,6 +4,8 @@ from app.services.login import verify_person_creds
 from app import models
 from app.database import get_session
 from app.services.registration import create_community_leader
+from app.routers.household import LoginRequest
+from app.services.login import login
 
 #-----------------------------------------
 
@@ -39,3 +41,23 @@ def register_community_leader(data: CommunityLeaderCreationRequest):
         "message": f"Community Leader created successfully with id {data.id} and name {data.first_name}",
     }
 #---------------------------------------------------------------------
+
+#this fn is identical to the household login version
+@router.post("/community-leader/login")
+def log_into_community_leader(data: LoginRequest):
+
+    #try to login
+    id = login(data.phone, data.password, models.Community_Leader)
+    if not id:
+        return {
+            "status": "failure",
+            "message": "phone number and password pair do not match",
+        }
+
+    #now that login is successful, we can return whatever data we want 
+    #TODO: use the id to retrieve profile data and send it here
+   
+    return {
+        "status": "ok",
+        "message": f"Successfully logged into community leader {id}",
+    }

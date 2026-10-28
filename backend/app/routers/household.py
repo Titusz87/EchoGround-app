@@ -41,12 +41,12 @@ def register_household(data: HouseholdCreationRequest):
     }
 #---------------------------------------------------------------------
 #log in to household
-class HouseholdLoginRequest(BaseModel):
+class LoginRequest(BaseModel):
     phone: str
     password: str
 
 @router.post("/household/login")
-def log_into_household(data: HouseholdLoginRequest):
+def log_into_household(data: LoginRequest):
 
     #try to login
     id = login(data.phone, data.password, models.Household)
