@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '/../services/database_helper.dart';
+import '../../services/database_helper.dart';
 
 class GuestModeHeader extends StatefulWidget {
   const GuestModeHeader({super.key});
