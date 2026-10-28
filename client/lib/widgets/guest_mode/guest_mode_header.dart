@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../../services/database_helper.dart'; // Clean relative folder import path
+import '../../services/database_helper.dart';
 
 class GuestModeHeader extends StatefulWidget {
   const GuestModeHeader({super.key});
@@ -11,90 +11,103 @@ class GuestModeHeader extends StatefulWidget {
 }
 
 class _GuestModeHeaderState extends State<GuestModeHeader> {
-  String _locationText = 'Fetching live location...'; // Default loading string parameter label
+  // Injected at build time with: --dart-define=NATIVE_LAND_KEY=your_key
+  // (in GitHub Actions: --dart-define=NATIVE_LAND_KEY=${{ secrets.NATIVE_LAND_KEY }})
+  static const String _nativeLandApiKey = String.fromEnvironment('NATIVE_LAND_KEY');
+
+  String _locationText = 'Fetching live location...';
 
   @override
   void initState() {
     super.initState();
-    
-    // 1. OFFLINE-FIRST: Load the combined Western + Indigenous text from local SQLite immediately
     _loadSavedLocationOnStartup();
-
-    // 2. SYSTEM LISTEN TRIGGER: Watch for fresh GPS variables to log into memory
     DatabaseHelper.instance.syncNotifier.addListener(_fetchRealLocation);
   }
 
   @override
   void dispose() {
-    // Release system listener state blocks cleanly on destruction to prevent memory leakage
     DatabaseHelper.instance.syncNotifier.removeListener(_fetchRealLocation);
     super.dispose();
   }
 
-  /// Instant Boot Loader: Checks your persistent local database config for a pre-saved location string
   Future<void> _loadSavedLocationOnStartup() async {
     try {
-      final savedFullLocation = await DatabaseHelper.instance.getConfig('last_resolved_full_location');
+      final savedFullLocation =
+          await DatabaseHelper.instance.getConfig('last_resolved_full_location');
       if (savedFullLocation != null && savedFullLocation.isNotEmpty && mounted) {
         setState(() {
           _locationText = savedFullLocation;
         });
       }
     } catch (e) {
-      print('Failed to load cached full location string on boot: $e');
+      print('Failed to load cached location on boot: $e');
     }
   }
 
-  /// Background Refresher Loop: Runs once your background thread locks down valid GPS variables
   Future<void> _fetchRealLocation() async {
     try {
       final double? lat = DatabaseHelper.instance.cachedLat;
       final double? lng = DatabaseHelper.instance.cachedLng;
 
-      // If the hardware coordinate arrays haven't completed loading yet, skip network actions
       if (lat == null || lng == null) return;
 
       print("Header matched verified coordinates: $lat, $lng");
 
-      // API QUERY A: Extract Western City and State boundaries via secure HTTPS Open-Meteo
-      final openMeteoUrl = Uri.parse(
-        'https://open-meteo.com'
+      // API QUERY A: City and state via BigDataCloud (CORS-friendly HTTPS)
+      final bigDataCloudUrl = Uri.parse(
+        'https://api.bigdatacloud.net/data/reverse-geocode-client'
+        '?latitude=$lat&longitude=$lng&localityLanguage=en',
       );
-      final cityResponse = await http.get(openMeteoUrl);
+      final cityResponse = await http.get(bigDataCloudUrl);
       String westernLocation = "";
 
       if (cityResponse.statusCode == 200) {
         final Map<String, dynamic> cityData = json.decode(cityResponse.body);
-        final List? results = cityData['results'];
-        if (results != null && results.isNotEmpty) {
-          final String city = results.first['name']?.toString().trim() ?? '';
-          final String state = results.first['admin1']?.toString().trim() ?? '';
+        final String city = cityData['city']?.toString().trim() ??
+            cityData['locality']?.toString().trim() ??
+            '';
+        final String state = cityData['principalSubdivision']?.toString().trim() ?? '';
+
+        if (city.isNotEmpty) {
           westernLocation = state.isNotEmpty ? '$city, $state' : city;
         }
       }
 
-      // API QUERY B: Extract First Nations Territories via secure HTTPS Native-Land
-      final nativeLandUrl = Uri.parse(
-        'https://native-land.ca'
-      );
-      final nativeLandResponse = await http.get(nativeLandUrl);
+      // API QUERY B: Native Land territories, with the injected API key.
+      // "$_nativeLandApiKey" is Dart string interpolation: at runtime it is
+      // replaced with the value that was passed via --dart-define.
       String indigenousTerritory = "";
 
-      if (nativeLandResponse.statusCode == 200) {
-        final List<dynamic> landData = json.decode(nativeLandResponse.body);
-        if (landData.isNotEmpty) {
-          final List<String> names = landData
-              .map((item) => item['properties']?['name']?.toString().trim() ?? '')
-              .where((name) => name.isNotEmpty)
-              .toList();
+      if (_nativeLandApiKey.isEmpty) {
+        print('NATIVE_LAND_KEY was not provided at build time; skipping Native Land lookup.');
+      } else {
+        final nativeLandUrl = Uri.parse(
+          'https://native-land.ca/api/index.php'
+          '?maps=territories&position=$lat,$lng&key=$_nativeLandApiKey',
+        );
+        final nativeLandResponse = await http.get(nativeLandUrl);
 
-          if (names.isNotEmpty) {
-            indigenousTerritory = names.join(', ');
+        if (nativeLandResponse.statusCode == 200) {
+          final List<dynamic> landData = json.decode(nativeLandResponse.body);
+          if (landData.isNotEmpty) {
+            final List<String> names = landData
+                .map((item) =>
+                    item['properties']?['Name']?.toString().trim() ??
+                    item['properties']?['name']?.toString().trim() ??
+                    '')
+                .where((name) => name.isNotEmpty)
+                .toList();
+
+            if (names.isNotEmpty) {
+              indigenousTerritory = names.join(', ');
+            }
           }
+        } else {
+          print('Native Land request failed: ${nativeLandResponse.statusCode}');
         }
       }
 
-      // COMBINATION SCHEMATIC: Stitch your parsing profiles together cleanly
+      // Combine both results
       String combinedResult = "";
       if (westernLocation.isNotEmpty && indigenousTerritory.isNotEmpty) {
         combinedResult = '$westernLocation · $indigenousTerritory';
@@ -104,16 +117,15 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
         combinedResult = indigenousTerritory;
       }
 
-      // UPDATE UI AND CACHE: Update values instantly and save them back to the disk partition
+      // Update UI and cache
       if (combinedResult.isNotEmpty && mounted) {
         setState(() {
           _locationText = combinedResult;
         });
-
-        // Write directly to your SQLite device_config table slot so next reload is instant!
-        await DatabaseHelper.instance.saveConfig('last_resolved_full_location', combinedResult);
+        await DatabaseHelper.instance
+            .saveConfig('last_resolved_full_location', combinedResult);
+        print("Location text stashed successfully: $combinedResult");
       }
-
     } catch (e) {
       print('Integrated location coordination failed: $e');
     }
@@ -134,19 +146,18 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
-              
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.location_on, // Material Design map vector pin component
+                    Icons.location_on,
                     size: 16,
-                    color: theme.colorScheme.primary, // Teal color tracking
+                    color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 4),
                   Flexible(
                     child: Text(
-                      _locationText, 
+                      _locationText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 14, color: Colors.white70),
