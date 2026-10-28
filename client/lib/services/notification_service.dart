@@ -45,7 +45,7 @@ class NotificationService {
 
         Position position = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
+            accuracy: LocationAccuracy.medium, // for a balance between precision and battery usage
           ),
         );
         print("Live Coordinates: Lat: ${position.latitude}, Lng: ${position.longitude}");
