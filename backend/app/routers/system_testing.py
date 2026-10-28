@@ -80,7 +80,7 @@ def wipe_all_db_records():
     }
 
 #this route lets you poll and update the db 
-@router.put("/system/poll")
+@router.post("/system/poll")
 async def poll_dataquoll(sync_db: bool):
     
     #can't poll while it's polling

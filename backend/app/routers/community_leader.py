@@ -19,6 +19,7 @@ class CommunityLeaderCreationRequest(BaseModel):
     first_name: str
     phone: str
     password: str | None = None #password isn't required
+    community_name: str
 
 @router.post("/community-leader/create")
 def register_community_leader(data: CommunityLeaderCreationRequest):
@@ -32,13 +33,13 @@ def register_community_leader(data: CommunityLeaderCreationRequest):
         }
 
     #now try to make the cl
-    success = create_community_leader(data.id, data.first_name, data.phone, data.password)        
-    if not success:
-        return {"status": "failure", "message": "Person id already is a community leader"}
+    message = create_community_leader(data.id, data.first_name, data.phone, data.password, data.community_name)        
+    if message is not True:
+        return {"status": "failure", "message": message}
 
     return {
         "status": "ok",
-        "message": f"Community Leader created successfully with id {data.id} and name {data.first_name}",
+        "message": f"Community Leader created successfully with id {data.id} and community name {data.community_name}",
     }
 #---------------------------------------------------------------------
 
@@ -47,8 +48,8 @@ def register_community_leader(data: CommunityLeaderCreationRequest):
 def log_into_community_leader(data: LoginRequest):
 
     #try to login
-    id = login(data.phone, data.password, models.Community_Leader)
-    if not id:
+    row = login(data.id, data.password, models.Community_Leader)
+    if not row:
         return {
             "status": "failure",
             "message": "phone number and password pair do not match",
@@ -59,5 +60,5 @@ def log_into_community_leader(data: LoginRequest):
    
     return {
         "status": "ok",
-        "message": f"Successfully logged into community leader {id}",
+        "message": f"Successfully logged into community leader '{row.first_name}'",
     }
