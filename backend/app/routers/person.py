@@ -123,3 +123,26 @@ def get_nearby_incidents_for_person(person_id: int):
             "incidents": incidents_list
         }
 
+#---------------------------------------------------------------------------------------------------
+class TokenChangeRequest(BaseModel):
+    id: int
+    new_token: str
+
+@router.post("/person/update-token")
+def update_a_users_fcm_token(data: TokenChangeRequest):
+    with get_session() as session:
+        
+        #first check whether the id exists. if it does, update it
+        row = session.get(models.People, data.id)
+        if row is None:
+            return {
+                "status": "failure", 
+                "message": "id not found in database"
+            }
+
+        row.fcm_token = data.new_token
+        session.commit()
+        return {
+            "status": "ok", 
+            "message": "fcm token successfully changed"
+        }

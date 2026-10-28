@@ -97,7 +97,7 @@ class SystemSettings(Base):
     #db functionality
     write_to_db: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     delete_all_tables: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    fcm_token_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False) #track whether users need their fcm token to be correct when doing stuff to db
+    fcm_token_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False) #track whether users need their fcm token to be correct when doing stuff like logging in
 
     #controls polling behavior
     auto_poll: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
