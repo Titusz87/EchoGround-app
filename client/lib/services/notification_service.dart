@@ -52,8 +52,13 @@ class NotificationService {
         );
         print("Live Coordinates: Lat: ${position.latitude}, Lng: ${position.longitude}");
 
+        // Cache the raw coordinates in app memory for the header to grab instantly
         DatabaseHelper.instance.cachedLat = position.latitude;
         DatabaseHelper.instance.cachedLng = position.longitude;
+
+        // REAL-TIME SIGNAL BROADCAST: Trigger the database change notification value
+        // This tells the header widget to wake up and run its reverse-geocoding process immediately!
+        DatabaseHelper.instance.syncNotifier.value++; 
 
         await _sendTokenToExternalServer(installationId, position.latitude, position.longitude);
 

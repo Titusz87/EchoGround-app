@@ -11,6 +11,7 @@ class DatabaseHelper {
   // Added reactive synchronisation notifier layer for real-time UI triggering
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
 
+  // In-memory cache for coordinates
   double? cachedLat;
   double? cachedLng;
   
@@ -36,6 +37,7 @@ class DatabaseHelper {
   }
 
   Future _createDB(Database db, int version) async {
+    // 1. Core local notification caching layout table schematic
     await db.execute('''
       CREATE TABLE notifications (
         id TEXT PRIMARY KEY,
@@ -52,6 +54,14 @@ class DatabaseHelper {
         address TEXT,
         created TEXT,
         last_modified TEXT
+      )
+    ''');
+
+    // 2. FIXED INTEGRATION: Created persistent configuration metadata table slot tracking
+    await db.execute('''
+      CREATE TABLE device_config (
+        key TEXT PRIMARY KEY,
+        value TEXT
       )
     ''');
   }
@@ -114,5 +124,31 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> fetchAllNotifications() async {
     final db = await instance.database;
     return await db.query('notifications', orderBy: 'created DESC');
+  }
+
+  //  Added properties mapping metadata indices down to local disk 
+
+  /// Dynamic key-value database schema dictionary writer
+  Future<void> saveConfig(String key, String value) async {
+    final db = await instance.database;
+    await db.insert(
+      'device_config',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Dynamic key-value database schema dictionary reader
+  Future<String?> getConfig(String key) async {
+    final db = await instance.database;
+    final maps = await db.query(
+      'device_config',
+      where: 'key = ?',
+      whereArgs: [key],
+    );
+    if (maps.isNotEmpty) {
+      return maps.first['value'] as String?;
+    }
+    return null;
   }
 }
