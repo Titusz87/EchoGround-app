@@ -15,7 +15,7 @@ class HouseholdDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CountryReady.ai'),
+        title: const Text('Household Dashboard'),
         centerTitle: true,
       ),
      body: SingleChildScrollView(

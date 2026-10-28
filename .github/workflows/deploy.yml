@@ -28,28 +28,6 @@ jobs:
         with:
           channel: 'stable'
 
-      # ---------------------------------------------------------------
-      # TEMPORARY DEBUG STEP 1 (delete after the problem is solved)
-      # Prints the secret values with spaces between characters so that
-      # GitHub does not mask them. Expected: echoground-9f92d and
-      # 1:600189671041:web:5cacabe5a91205faaa5f80
-      # ---------------------------------------------------------------
-      - name: Debug - show Firebase secrets (TEMPORARY)
-        run: |
-          echo "PROJECT_ID:"
-          echo "${{ secrets.FIREBASE_PROJECT_ID }}" | sed 's/./& /g'
-          echo "APP_ID:"
-          echo "${{ secrets.FIREBASE_APP_ID }}" | sed 's/./& /g'
-          echo "SENDER_ID:"
-          echo "${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" | sed 's/./& /g'
-
-      - name: Search source code for old Firebase values (TEMPORARY)
-        run: |
-          echo "Looking for old values in the repo source..."
-          grep -rn "country-ready" . --include="*.dart" --include="*.html" --include="*.js" --include="*.json" --include="*.yml" --include="*.yaml" --include="*.env" --exclude-dir=.git --exclude-dir=build --exclude-dir=node_modules || echo "country-ready: not found in source"
-          grep -rn "AIzaSyCEHG" . --exclude-dir=.git --exclude-dir=build --exclude-dir=node_modules || echo "AIzaSyCEHG: not found in source"
-          grep -rn "254583394013" . --exclude-dir=.git --exclude-dir=build --exclude-dir=node_modules || echo "254583394013: not found in source"
-
       - name: Install dependencies
         run: |
           cd client
@@ -65,28 +43,8 @@ jobs:
             --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
             --dart-define=FIREBASE_VAPID_KEY="${{ secrets.FIREBASE_VAPID_KEY }}" \
             --dart-define=BACKEND_URL="${{ secrets.BACKEND_URL }}" \
+            --dart-define=NATIVE_LAND_KEY="${{ secrets.NATIVE_LAND_API_KEY }}" \
             --base-href "/EchoGround-app/"
-
-      # ---------------------------------------------------------------
-      # TEMPORARY DEBUG STEP 2 (delete after the problem is solved)
-      # Checks the compiled output before it gets deployed.
-      # ---------------------------------------------------------------
-      - name: Check build output (TEMPORARY)
-        run: |
-          echo "Old project 'country-ready' matches in main.dart.js:"
-          grep -c "country-ready" client/build/web/main.dart.js || true
-          echo "Old key 'AIzaSyCEHG' matches in main.dart.js:"
-          grep -c "AIzaSyCEHG" client/build/web/main.dart.js || true
-          echo "New project 'echoground-9f92d' matches in main.dart.js:"
-          grep -c "echoground-9f92d" client/build/web/main.dart.js || true
-
-      # Safety guard (can stay): stops the deploy if the old project is still in the build
-      - name: Fail if old Firebase project is in the build
-        run: |
-          if grep -q "country-ready" client/build/web/main.dart.js; then
-            echo "ERROR: old Firebase project 'country-ready' found in build output. Not deploying."
-            exit 1
-          fi
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4

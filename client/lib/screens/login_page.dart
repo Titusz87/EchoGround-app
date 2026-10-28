@@ -9,7 +9,7 @@ class LoginPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CountryReady.ai'),
+        title: const Text('Login'),
         centerTitle: true,
       ),
       body: Padding(
@@ -19,7 +19,7 @@ class LoginPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Welcome to CountryReady.ai',
+              'Welcome to EchoGround',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 28,

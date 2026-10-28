@@ -9,10 +9,21 @@ import 'services/web_listener_stub.dart'
     if (dart.library.js) 'services/web_listener.dart';
 
 void initializeNotificationDatabaseSync() async {
-  // CASE 1: App is open/active in the foreground (Works everywhere out-of-the-box)
+  // CASE 1: App is open/active in the foreground
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    if (message.data.isNotEmpty) {
-      await DatabaseHelper.instance.insertNotification(message.data);
+    try {
+      // Safely check if message or message.data is null first
+      if (message.data != null) {
+        // Force conversion to a clean, modifiable Dart Map
+        final Map<String, dynamic> cleanData = Map<String, dynamic>.from(message.data);
+        
+        if (cleanData.isNotEmpty) {
+          print("Foreground raw payload sanitized safely. Ingesting row entries...");
+          await DatabaseHelper.instance.insertNotification(cleanData);
+        }
+      }
+    } catch (e) {
+      print("Intercepted a foreground payload extraction issue safely: $e");
     }
   });
 
@@ -36,6 +47,7 @@ void initializeNotificationDatabaseSync() async {
     print("SQLite Database Error during startup: $e");
   }
 }
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

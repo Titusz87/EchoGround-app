@@ -5,6 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'database_helper.dart';
+
 
 class NotificationService {
   static Future<void> initFirebase() async {
@@ -50,6 +52,14 @@ class NotificationService {
         );
         print("Live Coordinates: Lat: ${position.latitude}, Lng: ${position.longitude}");
 
+        // Cache the raw coordinates in app memory for the header to grab instantly
+        DatabaseHelper.instance.cachedLat = position.latitude;
+        DatabaseHelper.instance.cachedLng = position.longitude;
+
+        // REAL-TIME SIGNAL BROADCAST: Trigger the database change notification value
+        // This tells the header widget to wake up and run its reverse-geocoding process immediately!
+        DatabaseHelper.instance.syncNotifier.value++; 
+
         await _sendTokenToExternalServer(installationId, position.latitude, position.longitude);
 
       } catch (e) {
@@ -69,15 +79,27 @@ class NotificationService {
     }
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('Foreground dataset update received: ${message.data}');
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message.data['body'] ?? 'New Incident Updated Nearby!'),
-            backgroundColor: Colors.teal,
-          ),
-        );
+      try {
+        if (message.data != null) {
+          // 1. Force convert the raw web object tree into a native, type-safe Dart Map
+          final Map<String, dynamic> cleanData = Map<String, dynamic>.from(message.data);
+          
+          print('Foreground dataset update received and sanitized: $cleanData');
+          
+          if (context.mounted) {
+            // 2. Extract values safely from the clean, native Dart Map
+            final snackBarText = cleanData['body']?.toString() ?? 'New Incident Updated Nearby!';
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(snackBarText),
+                backgroundColor: Colors.teal,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        print('Intercepted a snackbar payload processing issue safely: $e');
       }
     });
   }
