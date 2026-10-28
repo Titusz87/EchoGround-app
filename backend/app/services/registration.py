@@ -1,5 +1,6 @@
 from app import models 
 from app.database import get_session
+from app.services import db_helpers as db
 
 def create_person(_latitude, _longitude, _fcm_token = None):
     with get_session() as session:
@@ -52,20 +53,26 @@ def create_household(_id, _last_name, _phone, _count, _password):
         print("Successfully registered household")
         return True
 
-def create_community_leader(_id, _first_name, _phone, _password):
+def create_community_leader(_id, _first_name, _phone, _password, _community_name):
     with get_session() as session:
         #check whether the person already is a community leader
         existing_c_l = session.get(models.Community_Leader, _id)
 
         if existing_c_l is not None:
-            return False
+            return "community leader profile has already been created"
+
+        #now check whether the community name is already in use
+        community_names = db.get_column(session, models.Community_Leader, "community_name")
+        if _community_name in community_names:
+            return f"community name {_community_name} is already in use"
         
         #finally make the community leader
         community_leader = models.Community_Leader(
             id=_id,
             first_name=_first_name,
             phone=_phone,
-            password = _password
+            password = _password,
+            community_name = _community_name
         )
         session.add(community_leader)
         session.commit()

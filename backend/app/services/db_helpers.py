@@ -28,7 +28,8 @@ def convert_incidents_orm_objects(incidents, incident_type):
             description = incident.description, 
             address = incident.address,
             created = incident.created,
-            test_incident = incident.test_incident
+            test_incident = incident.test_incident,
+            validated_by = incident.validated_by
         )
         translated.append(current_incident)
     return translated
@@ -138,7 +139,7 @@ def print_table_info(session, model):
     except Exception as e:
         print(f"Failed to get table info: {e}")    
 
-#retrieve a value
+#retrieve a column value from a specific row
 def get_value_by_id(session, model, row_id, column):
     row = session.get(model, row_id)
     if row is None:
@@ -146,3 +147,10 @@ def get_value_by_id(session, model, row_id, column):
         return None
     return getattr(row, column)
 
+#retrieve all values of a column from a table
+def get_column(session, model, field):
+    if not hasattr(model, field):
+        print("Incorrect column name inputted in source code")
+        return []
+    column = getattr(model, field)
+    return session.execute(select(column)).scalars().all()

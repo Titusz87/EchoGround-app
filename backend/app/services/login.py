@@ -25,20 +25,19 @@ def verify_person_creds(person_id, fcm_token):
         return True
 
 #this fn should work for both households and community leaders
-def login(phone, password, model):
+def login(id, password, model):
     with get_session() as session:
 
-        #this method finally came in useful
-        #this could theoretically return more than 1 row but for the sake of the prototype we won't worry about it
-        profiles = db.get_db_rows_by_all_fields(session, model, {"phone": phone, "password": password})
-        if profiles is None:
+        #get the row and see if the password matches 
+        row = session.get(model, id)
+        if row is None:
             return False
 
         #if the pair didn't match login doesn't work
-        if not profiles:
+        if row.password != password:
             return False
 
-        return profiles[0].id #the db helper returns a list so we need it's only member
+        return row 
 
         
         

@@ -31,8 +31,8 @@ class Incident(Base):
     description: Mapped[str | None]
     address: Mapped[str | None]
     created: Mapped[datetime] #this value is created by our program in case 'expires' is null  
-    #fake_incident: Mapped[Boolean | False] #this is a value we can use to track whether we've purposely created a fake incident for testing 
-    test_incident: Mapped[bool] = mapped_column(Boolean, default=False)
+    test_incident: Mapped[bool] = mapped_column(Boolean, default=False) #this is a value we can use to track whether we've purposely created a fake incident for testing 
+    validated_by: Mapped[list[str]] = mapped_column(ARRAY(String),default=list) #incidents have a list of community names that they are validated by
 
 #these 3 tables inherit from the incident class
 #Current_Incident stores the incidents that are in progress
@@ -63,6 +63,8 @@ class Community_Leader(Base):
     first_name: Mapped[str]
     phone: Mapped[str]
     password: Mapped[str | None] = mapped_column(String)
+    community_name: Mapped[str] = mapped_column(String, nullable=False) 
+    community_members: Mapped[list[int]] = mapped_column(ARRAY(Integer),default=list)
 
 #stores info of individual households (users)
 class Household(Base):
@@ -77,9 +79,10 @@ class Household(Base):
 #------------------profile classes------------------------------------------------------------
 
 #this table store the community info that is created by community leaders
-class Community_Profile(Base):
-    __tablename__ = "community_profiles"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+#NOTE this model is probably not needed, as the community leader will have 1 community, and store member ids in a list
+# class Community_Profile(Base):
+#     __tablename__ = "community_profiles"
+#     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
 #we need to remember which incidents affect which people
 class People_Incident(Base):

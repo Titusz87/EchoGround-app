@@ -128,7 +128,7 @@ class TokenChangeRequest(BaseModel):
     id: int
     new_token: str
 
-@router.post("/person/update-token")
+@router.patch("/person/update-token")
 def update_a_users_fcm_token(data: TokenChangeRequest):
     with get_session() as session:
         
