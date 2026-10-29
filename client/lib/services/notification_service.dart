@@ -45,7 +45,7 @@ class NotificationService {
       );
       
       if (token != null && token.isNotEmpty) {
-        print("FCM Web Application Registered. ID: $token");
+        print("FCM Web Application Registered. Token: $token");
 
         bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
         if (serviceEnabled) {
