@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from app.models import Base
+from app import models
 
 DATABASE_URL = None
 engine = None
@@ -47,7 +47,7 @@ def connect_to_db():
     # create_all creates any missing tables, which a new empty database needs.
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine)
-    Base.metadata.create_all(engine)
+    models.Base.metadata.create_all(engine)
 
 
 # this is called by table classes when they do db fn's
@@ -65,5 +65,20 @@ def get_db():
         session.close()
 
 def recreate_all_tables():
-    Base.metadata.create_all(bind=engine)
+    models.Base.metadata.create_all(bind=engine)
     print("Recreated all tables")
+
+#delete the actual tables
+#delete all tables except system_settings
+def delete_all_tables():
+    try:
+        with get_session() as session:
+            bind = session.get_bind()
+
+            #exclude the system settings table
+            tables_to_drop = [table for table in models.Base.metadata.sorted_tables if table.name != models.SystemSettings.__tablename__]
+            models.Base.metadata.drop_all(bind=bind, tables=tables_to_drop)
+            print("Deleted all tables except system_settings")
+
+    except Exception as e:
+        print(f"Failed to delete tables: {e}")

@@ -4,7 +4,7 @@ from app import models
 from app.services import system_settings
 
 #check for person_id and fcm token pair to validate person exists in db 
-def verify_person_creds(person_id, fcm_token):
+def verify_person_creds(person_id, fcm_token = None):
     with get_session() as session:
 
         person = session.get(models.People, person_id)

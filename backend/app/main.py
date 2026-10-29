@@ -12,7 +12,7 @@ from app.services.betterstack_log import setup_betterstack
 from app.services.poll_dataquoll import poll_all_states, setup_polling
 from app.services.incident_sync import custom_quadtree
 from app.services.firebase import initialise_firebase, firebase_test_notification
-from app.database import connect_to_db, get_session, recreate_all_tables
+from app.database import connect_to_db, get_session, recreate_all_tables, delete_all_tables
 from app.routers.person import router as person_router
 from app.routers.system_testing import router as system_testing_router
 from app.routers.household import router as household_router
@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
     connect_to_db()
     system_settings.initialise_system_settings() #this can only be called after connecting to the db 
     if system_settings.get("delete_all_tables"): #wipe tables if we want
-        db.delete_all_tables()  
-        recreate_all_tables()                     
+        delete_all_tables()  
+        recreate_all_tables()                  
     setup_polling()
     do_additional_db_jobs()
     do_additional_firebase_jobs()

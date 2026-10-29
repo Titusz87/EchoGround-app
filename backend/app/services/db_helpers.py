@@ -93,6 +93,7 @@ def get_rows_from_ids(session, model, ids):
         return result.scalars().all()
     except Exception as e:
         print(f"Failed to get the rows from table {model.__tablename__} by their ids: {e}")
+        return []
 
 #wipe all the rows from a table
 def flush_db_table(session, model):
@@ -116,20 +117,6 @@ def flush_all_tables(session):
     except Exception as e:
         print(f"Failed to wipe data from all tables: {e}")
 
-#delete the actual tables
-# Delete all tables except system_settings
-def delete_all_tables():
-    try:
-        with get_session() as session:
-            bind = session.get_bind()
-
-            #exclude the system settings table
-            tables_to_drop = [table for table in Base.metadata.sorted_tables if table.name != models.SystemSettings.__tablename__]
-            Base.metadata.drop_all(bind=bind, tables=tables_to_drop)
-            print("Deleted all tables except system_settings")
-
-    except Exception as e:
-        print(f"Failed to delete tables: {e}")
 
 #return any wanted info about tables for debugging
 def print_table_info(session, model):
@@ -154,3 +141,10 @@ def get_column(session, model, field):
         return []
     column = getattr(model, field)
     return session.execute(select(column)).scalars().all()
+
+#i seem to be doing this a lot
+def get_row(session, model, id):
+    row = session.get(model, id)
+    if row is None:
+        return False
+    return row

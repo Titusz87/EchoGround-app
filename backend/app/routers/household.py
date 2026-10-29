@@ -15,7 +15,7 @@ router = APIRouter()
 #make a household
 class HouseholdCreationRequest(BaseModel):
     id: int
-    fcm_token: str
+    #fcm_token: str
     last_name: str
     phone: str
     count: int | None = None #client can provide these value but it is not required
@@ -24,7 +24,7 @@ class HouseholdCreationRequest(BaseModel):
 @router.post("/household/create")
 def register_household(data: HouseholdCreationRequest):
 
-    verification = verify_person_creds(data.id, data.fcm_token)
+    verification = verify_person_creds(data.id) #data.fcm_token)
     if verification is not True:
         return {
             "status": "failure",
@@ -96,12 +96,17 @@ def register_household_to_community(data: CommunityRegistrationRequest):
         if len(community_leader) == 0:
             return{
                     "status": "failure",
-                    "message" : f"community name {data.community_name} not found in database"
+                    "message" : f"community name '{data.community_name}' not found in database"
             }
         community_leader = community_leader[0]
             
-        #we know this exists because the household is logged in by this point. 
+        #we know this exists because the household is logged in by this point. but just in case...
         household = session.get(models.Household, data.id)
+        if household is None:
+            return {
+                "status": "failure",
+                "message" : f"id:{data.id} does not have a household"
+            }
 
         #check the household isn't already signed up, otherwise append the id
         if data.id in community_leader.community_members:
@@ -110,11 +115,17 @@ def register_household_to_community(data: CommunityRegistrationRequest):
                 "message" : f"{household.last_name} household is already a member of {community_leader.community_name}"
             }
 
-        community_leader.community_members.append(data.id)
+        #safely add the id without duplicates
+        #we need to do this to append to Postgres arrays
+        members = list(community_leader.community_members or [])
+        if data.id not in members:
+            members.append(data.id)
+            community_leader.community_members = members
         session.commit()
+        
         return {
             "status": "ok",
-            "message" : f"{household.last_name} household successfully registered to {community_leader.community_name}" 
+            "message" : f"{household.last_name} household successfully registered to '{community_leader.community_name}': containing {len(community_leader.community_members)} members" 
         }
 
         

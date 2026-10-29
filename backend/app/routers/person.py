@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.services.registration import create_person
 from app.database import get_session
 from app import models
 from app.services.login import verify_person_creds
+from datetime import datetime
 # Commented out for local integration validation tests
 # from app.services.firebase import verify_app_check
 
@@ -75,6 +76,7 @@ def update_location(data: LocationUpdateRequest):
 # NOTE: this endpoint is used by the frontend dashboard view to fetch and plot 
 # a complete live list of nearby active hazards on the map screen canvas 
 # (useful because firebase push alerts only handle one-time temporary events
+
 @router.get("/person/{person_id}/incidents")
 def get_nearby_incidents_for_person(person_id: int):
     with get_session() as session:
@@ -113,7 +115,9 @@ def get_nearby_incidents_for_person(person_id: int):
                 "longitude": inc.longitude,
                 "description": inc.description,
                 "address": inc.address,
-                "last_updated": inc.last_updated.isoformat() if inc.last_updated else None
+                "last_updated": inc.last_updated.isoformat() if inc.last_updated else None,
+                "test_incident": inc.test_incident,
+                "validated_by": inc.validated_by
             })
             
         return {
