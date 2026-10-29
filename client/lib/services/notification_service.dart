@@ -1,4 +1,3 @@
-// client/lib/services/notification_service.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -6,7 +5,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'database_helper.dart';
-
 
 class NotificationService {
   static Future<void> initFirebase() async {
@@ -30,47 +28,8 @@ class NotificationService {
        return;
     }
 
-    messaging.onRegistered.listen((String installationId) async {
-      print("FCM Web Application Registered. ID: $installationId");
-      
-      try {
-        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        if (!serviceEnabled) return;
-
-        LocationPermission permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
-          if (permission == LocationPermission.denied) return;
-        }
-        
-        if (permission == LocationPermission.deniedForever) return;
-
-        Position position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-          ),
-        );
-        print("Live Coordinates: Lat: ${position.latitude}, Lng: ${position.longitude}");
-
-        // Cache the raw coordinates in app memory for the header to grab instantly
-        DatabaseHelper.instance.cachedLat = position.latitude;
-        DatabaseHelper.instance.cachedLng = position.longitude;
-
-        // REAL-TIME SIGNAL BROADCAST: Trigger the database change notification value
-        // This tells the header widget to wake up and run its reverse-geocoding process immediately!
-        DatabaseHelper.instance.syncNotifier.value++; 
-
-        await _sendTokenToExternalServer(installationId, position.latitude, position.longitude);
-
-      } catch (e) {
-        print('Error gathering real-time spatial footprint data: $e');
-      }
-    }).onError((err) {
-      print('Error getting Firebase Installation ID from stream: $err');
-    });
-
     try {
-      // Looks for your VAPID key injected at compile time
+      // Looks for VAPID key injected at compile time
       await messaging.register(
         vapidKey: const String.fromEnvironment('FIREBASE_VAPID_KEY'),
       );
@@ -78,16 +37,86 @@ class NotificationService {
       print('Error during FCM web manual registration handshake step: $e');
     }
 
+    // Get the generated registration token value
+    try {
+      // ignore: deprecated_member_use
+      String? token = await messaging.getToken(
+        vapidKey: const String.fromEnvironment('FIREBASE_VAPID_KEY'),
+      );
+      
+      if (token != null && token.isNotEmpty) {
+        print("FCM Web Application Registered. Token: $token");
+
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled) {
+          LocationPermission permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+          }
+          
+          if (permission != LocationPermission.denied && permission != LocationPermission.deniedForever) {
+            Position position = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.low,
+                timeLimit: Duration(seconds: 5),
+              ),
+            );
+            print("Live Coordinates: Lat: ${position.latitude}, Lng: ${position.longitude}");
+
+            // Cache the raw coordinates in app memory for the header to grab instantly
+            DatabaseHelper.instance.cachedLat = position.latitude;
+            DatabaseHelper.instance.cachedLng = position.longitude;
+
+            // REAL-TIME SIGNAL BROADCAST: Trigger the database change notification value
+            DatabaseHelper.instance.syncNotifier.value++;
+
+            // --- SMART ROUTING MANAGER ENGINE ---
+            // Check if this device already holds an established backend profile row index
+            final String? savedPersonId = await DatabaseHelper.instance.getConfig('backend_person_id');
+            final String? lastSavedToken = await DatabaseHelper.instance.getConfig('last_fcm_token');
+
+            // Optimization Guard: Skip network entirely if the token hasn't changed
+            if (lastSavedToken == token) {
+              print("FCM token matches stored state. Skipping network sync.");
+              return;
+            }
+
+            if (savedPersonId != null) {
+              final int? parsedId = int.tryParse(savedPersonId);
+              if (parsedId != null) {
+                print("Local Profile ID ($parsedId) detected. Executing in-place token update...");
+                final bool updateSuccess = await _updateTokenOnExternalServer(parsedId, token);
+                
+                if (updateSuccess) {
+                  await DatabaseHelper.instance.saveConfig('last_fcm_token', token);
+                  print("Token updated successfully for active profile row.");
+                  return;
+                }
+              }
+            }
+
+            // Fallback: If no cached row is found, proceed with a fresh registration
+            print("No local identity record found. Registering a brand new row mapping...");
+            await _sendTokenToExternalServer(token, position.latitude, position.longitude);
+          }
+        }
+      } else {
+        print('FCM registration token returned null or empty.');
+      }
+    } catch (e) {
+      print('Error gathering real-time spatial footprint data: $e');
+    }
+
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       try {
         if (message.data != null) {
-          // 1. Force convert the raw web object tree into a native, type-safe Dart Map
+          // Force convert the raw web object tree into a native, type-safe Dart Map
           final Map<String, dynamic> cleanData = Map<String, dynamic>.from(message.data);
           
           print('Foreground dataset update received and sanitized: $cleanData');
           
           if (context.mounted) {
-            // 2. Extract values safely from the clean, native Dart Map
+            // Extract values safely from the clean, native Dart Map
             final snackBarText = cleanData['body']?.toString() ?? 'New Incident Updated Nearby!';
             
             ScaffoldMessenger.of(context).showSnackBar(
@@ -104,18 +133,19 @@ class NotificationService {
     });
   }
 
+  /// Initial Registration: Spawns a new profile entry on the backend and captures the generated ID
   static Future<void> _sendTokenToExternalServer(String token, double lat, double lng) async {
-    // 1. Pull base deployment server path from environment parameters
+    // Pull base deployment server path from environment parameters
     const String backendBaseUrl = String.fromEnvironment('BACKEND_URL');
     
-    // 2. UPDATED: Target Evan's explicit subpath address channel
+    // Targets explicit subpath address channel
     final url = Uri.parse('$backendBaseUrl/person/create');
     
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        // 3. UPDATED: Match the exact variable naming conventions expected by StartupRequest
+        // Match the exact variable naming conventions expected by StartupRequest
         body: jsonEncode({
           'fcm_token': token,
           'latitude': lat,
@@ -124,9 +154,54 @@ class NotificationService {
       );
       print('Backend registration server status code: ${response.statusCode}');
       print('Backend Response Body Array context: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        
+        // Dynamically parse for 'person_id' or 'id' based on the backend model return layout
+        final dynamic assignedId = responseData['person_id'] ?? responseData['id'];
+
+        if (assignedId != null) {
+          final String idString = assignedId.toString();
+          
+          // Permanently log identity keys into your local SQLite device_config table
+          await DatabaseHelper.instance.saveConfig('backend_person_id', idString);
+          await DatabaseHelper.instance.saveConfig('last_fcm_token', token);
+          
+          print('Bound identity stored to local storage container. Active Person ID: $idString');
+        }
+      }
     } catch (e) {
       print('Network connection error: $e');
     }
   }
 
+  /// In-place Update: Dispatches the new token to update with matching cached ID
+  static Future<bool> _updateTokenOnExternalServer(int personId, String newFcmToken) async {
+    const String backendBaseUrl = String.fromEnvironment('BACKEND_URL');
+    final url = Uri.parse('$backendBaseUrl/person/update-token');
+    
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'id': personId,
+          'new_token': newFcmToken,
+        }),
+      );
+      
+      print('Backend update token status code: ${response.statusCode}');
+      print('Backend Update Response Body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        return responseData['status'] == 'ok';
+      }
+      return false;
+    } catch (e) {
+      print('Error dispatching token update metadata to backend: $e');
+      return false;
+    }
+  }
 }

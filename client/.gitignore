@@ -50,5 +50,7 @@ app.*.map.json
 #Env 
 .env
 
+env.json
+
 #todo
-.TODO.md
+TODO.md
