@@ -57,7 +57,6 @@ def create_community_leader(_id, _first_name, _phone, _password, _community_name
     with get_session() as session:
         #check whether the person already is a community leader
         existing_c_l = session.get(models.Community_Leader, _id)
-
         if existing_c_l is not None:
             return "community leader profile has already been created"
 
@@ -72,9 +71,10 @@ def create_community_leader(_id, _first_name, _phone, _password, _community_name
             first_name=_first_name,
             phone=_phone,
             password = _password,
-            community_name = _community_name
+            community_name = _community_name #this is the value that is unique. not the first name
         )
         session.add(community_leader)
         session.commit()
         print("Successfully registered community leader")
         return True
+
