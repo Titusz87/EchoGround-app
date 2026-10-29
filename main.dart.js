@@ -8305,7 +8305,7 @@ return A.p(a.gGi().hS(null,u.B),$async$hh)
 case 13:m=a4
 s=m!=null&&m.length!==0?14:16
 break
-case 14:A.bz("FCM Web Application Registered. ID: "+m)
+case 14:A.bz("FCM Web Application Registered. Token: "+m)
 s=17
 return A.p($.a1x().CF(),$async$hh)
 case 17:l=a4
