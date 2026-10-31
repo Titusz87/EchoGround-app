@@ -30,6 +30,7 @@ def create_person(_latitude, _longitude, _fcm_token = None):
         session.add(people_incident)
         
         session.commit()
+        print("Successfully created person in db")
         return person.id
 
 def create_household(_id, _last_name, _phone, _count, _password):
@@ -46,11 +47,11 @@ def create_household(_id, _last_name, _phone, _count, _password):
             last_name=_last_name,
             phone=_phone,
             count=_count,
-            password = _password
+            password = _password,
         )
         session.add(household)
         session.commit()
-        print("Successfully registered household")
+        print(f"Successfully created household '{household.last_name}' in db")
         return True
 
 def create_community_leader(_id, _first_name, _phone, _password, _community_name):
@@ -75,6 +76,21 @@ def create_community_leader(_id, _first_name, _phone, _password, _community_name
         )
         session.add(community_leader)
         session.commit()
-        print("Successfully registered community leader")
+        print(f"Successfully registered {community_leader.first_name} as a community leader")
         return True
+
+def create_emergency_report(_sender_id, _community_leader_id, _title, _location, _description):
+    with get_session() as session:
+        emergency_report = models.Emergency_Report(
+                sender_id = _sender_id,
+                community_leader_id = _community_leader_id,
+                title = _title,   
+                location = _location,
+                description = _description 
+                )
+        session.add(emergency_report)
+        session.commit()
+        print(f"Successfully created emergency report '{emergency_report.title}'")
+        return True
+
 
