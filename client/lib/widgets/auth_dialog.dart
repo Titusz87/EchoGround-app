@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../services/database_helper.dart';
 
 void showLoginDialog(BuildContext context, {required bool isLeader, required VoidCallback onAuthSuccess}) {
   final passwordController = TextEditingController();
@@ -10,7 +9,7 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
   final communityController = TextEditingController();
   
   bool isLogin = true; 
-  String? errorMessage; // Dynamic inline error message state placeholder
+  String? errorMessage; 
 
   showDialog(
     context: context,
@@ -23,7 +22,7 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
             final theme = Theme.of(context);
             
             return Dialog(
-              backgroundColor: Colors.grey[850], // Darkened background slightly for premium contrast
+              backgroundColor: Colors.grey,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
@@ -36,7 +35,6 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
                     ),
                     const SizedBox(height: 16),
                     
-                    // --- DYNAMIC ERROR STATE ALERT PANELS ---
                     if (errorMessage != null) ...[
                       Container(
                         width: double.infinity,
@@ -61,7 +59,6 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
                       ),
                       const SizedBox(height: 16),
                     ],
-                    // ----------------------------------------
 
                     if (!isLogin) ...[
                       TextField(
@@ -116,19 +113,17 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
                           padding: const EdgeInsets.symmetric(vertical: 14)
                         ),
                         onPressed: () async {
-                          // Clear out past warning strings upon every new button invocation click
                           setState(() { errorMessage = null; });
 
-                          final String? savedPersonId = await DatabaseHelper.instance.getConfig('backend_person_id');
-                          if (savedPersonId == null) {
+                          // Call service logic method to ensure backend person ID is available
+                          final int? parsedId = await AuthService.ensureBackendPersonId(context);
+                          
+                          if (parsedId == null) {
                             setState(() {
-                              errorMessage = 'Device Registration missing. Please restart app setup.';
+                              errorMessage = 'Could not resolve device connectivity. Please try again.';
                             });
                             return;
                           }
-
-                          final int? parsedId = int.tryParse(savedPersonId);
-                          if (parsedId == null) return;
 
                           if (passwordController.text.trim().isEmpty) {
                             setState(() { errorMessage = 'Password field cannot be empty.'; });
@@ -149,11 +144,11 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
                             }
                           } else {
                             if (nameController.text.trim().isEmpty || phoneController.text.trim().isEmpty) {
-                              setState(() { errorMessage = 'All dynamic information fields are required.'; });
+                              setState(() { errorMessage = 'All information fields are required.'; });
                               return;
                             }
                             if (isLeader && communityController.text.trim().isEmpty) {
-                              setState(() { errorMessage = 'Community Name is explicitly required.'; });
+                              setState(() { errorMessage = 'Community Name is required.'; });
                               return;
                             }
 
@@ -194,7 +189,7 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
                       onPressed: () {
                         setState(() { 
                           isLogin = !isLogin; 
-                          errorMessage = null; // Clear warnings when flipping panels
+                          errorMessage = null; 
                         });
                       },
                       child: Text(

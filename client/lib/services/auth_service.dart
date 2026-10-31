@@ -1,9 +1,30 @@
 import 'dart:convert';
+import 'package:flutter/material.dart'; 
 import 'package:http/http.dart' as http;
 import 'database_helper.dart';
+import 'notification_service.dart'; 
 
 class AuthService {
   static const String _backendBaseUrl = String.fromEnvironment('BACKEND_URL');
+
+  /// Verifies local storage holds a valid backend identity key.
+  /// Automatically resolves missing entries via the background push setup routine.
+  static Future<int?> ensureBackendPersonId(BuildContext context) async {
+    // Fetch the persistent device registration identifier from SQLite
+    String? savedPersonId = await DatabaseHelper.instance.getConfig('backend_person_id');
+    
+    //  Wakes up registration service if browser cache was cleared
+    if (savedPersonId == null || savedPersonId.isEmpty) {
+      print("Local identity missing during auth check. Resolving via background push service...");
+      if (context.mounted) {
+        await NotificationService.setupPushNotifications(context);
+      }
+      savedPersonId = await DatabaseHelper.instance.getConfig('backend_person_id');
+    }
+
+    if (savedPersonId == null || savedPersonId.isEmpty) return null;
+    return int.tryParse(savedPersonId);
+  }
 
   /// Handles Login Requests for both Roles dynamically
   static Future<bool> login({
@@ -83,3 +104,4 @@ class AuthService {
     }
   }
 }
+
