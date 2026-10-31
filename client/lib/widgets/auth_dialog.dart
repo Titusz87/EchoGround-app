@@ -22,7 +22,7 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
             final theme = Theme.of(context);
             
             return Dialog(
-              backgroundColor: Colors.grey,
+              backgroundColor:const Color(0xFF14171A),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
@@ -109,7 +109,10 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary, 
+                          backgroundColor: const Color(0xFF4DB6AC), 
+                          foregroundColor: const Color(0xFF14171A), 
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.0)), 
                           padding: const EdgeInsets.symmetric(vertical: 14)
                         ),
                         onPressed: () async {
