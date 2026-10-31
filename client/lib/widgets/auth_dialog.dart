@@ -7,6 +7,8 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
   final phoneController = TextEditingController();
   final nameController = TextEditingController(); 
   final communityController = TextEditingController();
+  final countController = TextEditingController();
+
   
   bool isLogin = true; 
   String? errorMessage; 
@@ -80,6 +82,22 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
                           border: OutlineInputBorder()
                         ),
                       ),
+                      
+                      const SizedBox(height: 12),
+                      if (!isLeader) ...[
+                      TextField(
+                        controller: countController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Household Members Count',
+                          labelStyle: TextStyle(color: Colors.white60),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                  ],
+                        
+
                       const SizedBox(height: 12),
                       if (isLeader) ...[
                         TextField(
@@ -162,6 +180,7 @@ void showLoginDialog(BuildContext context, {required bool isLeader, required Voi
                               secondaryName: nameController.text,
                               communityName: communityController.text,
                               isLeader: isLeader,
+                              count: int.tryParse(countController.text) ?? 0,
                             );
                             
                             if (success) {
