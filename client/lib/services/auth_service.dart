@@ -67,6 +67,7 @@ class AuthService {
     required String phone,
     required String secondaryName, // Represents last_name for household, or first_name for leader
     required String communityName, // Exclusive parameter used by leaders
+    required int count,
     required bool isLeader,
   }) async {
     final String subPath = isLeader ? 'community-leader/create' : 'household/create';
@@ -85,7 +86,7 @@ class AuthService {
             'id': id,
             'last_name': secondaryName,
             'phone': phone,
-            'count': 0, // Matches your schema contract default count parameter
+            'count': count,
             'password': password,
           };
 
