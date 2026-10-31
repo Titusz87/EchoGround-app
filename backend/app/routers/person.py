@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
-from app.services.registration import create_person
+from app.services.create_records import create_person
 from app.database import get_session
 from app import models
 from app.services.login import verify_person_creds

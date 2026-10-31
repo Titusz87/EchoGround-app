@@ -1,9 +1,9 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.services.login import verify_person_creds
 from app import models
 from app.database import get_session
-from app.services.registration import create_household
+from app.services.create_records import create_household, create_emergency_report
 from app.services.login import login
 from app.services import db_helpers as db
 
@@ -88,6 +88,15 @@ class CommunityRegistrationRequest(BaseModel):
 @router.patch("/household/register")
 def register_household_to_community(data: CommunityRegistrationRequest):
     with get_session() as session:
+
+        #default safety check to check the person exists
+        verification = verify_person_creds(data.id) #data.fcm_token)
+        if verification is not True:
+            return {
+                "status": "failure",
+                "message": verification,
+            }
+        
         #we know that the community name must exist because the front end received a list of all the names
         #this would be a problem if community leaders could be deleted, but for the prototype we aren't implementing this
 
@@ -121,17 +130,62 @@ def register_household_to_community(data: CommunityRegistrationRequest):
         if data.id not in members:
             members.append(data.id)
             community_leader.community_members = members
+        
+        #finally, add the community leader id to the household row
+        household.community_leader_id = community_leader.id
         session.commit()
         
         return {
             "status": "ok",
             "message" : f"{household.last_name} household successfully registered to '{community_leader.community_name}': containing {len(community_leader.community_members)} members" 
         }
+#-------------------------------------------------------------------------------------------
+class EmergencyReportRegistrationRequest(BaseModel):
+    id: int
+    title: str = Field(min_length=1)
+    location: str = Field(min_length=1)
+    description: str = Field(min_length=1)
 
-        
+#we are going to need to do a lot of checks for this one >:(      
+@router.post("/household/emergency-report")
+def send_emergency_report_to_db(data: EmergencyReportRegistrationRequest):
+    with get_session() as session:
 
-        
+        #default safety check to check the person exists
+        verification = verify_person_creds(data.id) #data.fcm_token)
+        if verification is not True:
+            return {
+                "status": "failure",
+                "message": verification,
+            }            
+        #check that the household exits. It should, because this route will be used on the household dashboard
+        household = session.get(models.Household, data.id)
+        if household is None:
+            return {
+                "status": "failure",
+                "message" : f"id:{data.id} does not have a household"
+            }
+        #now that we know there is a valid household, check whether it belongs to a community
+        if household.community_leader_id is None:
+            return {
+                "status": "failure",
+                "message" : f"household '{household.last_name}' does not belong to a community"
+            }
+        #now we can create the actual report 
+        creation_status = create_emergency_report(data.id, household.community_leader_id, data.title, data.location, data.description)
+        if creation_status is not True:
+            return {
+                "status": "failure",
+                "message" : "Failed to submit emergency report"
+            }
 
-    
+        community_leader = session.get(models.Community_Leader, household.community_leader_id)
+        return {
+            "status": "ok",
+            "message" : f"Submitted emergency report '{data.title}' to community: {community_leader.community_name}"
+        }
+
+        #TODO: this could be a push notification to the community leader
+
 
 

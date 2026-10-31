@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from app.services.login import verify_person_creds
 from app import models
 from app.database import get_session
-from app.services.registration import create_community_leader
+from app.services.create_records import create_community_leader
 from app.routers.household import LoginRequest
 from app.services.login import login
 from app.services import db_helpers as db

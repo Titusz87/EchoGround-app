@@ -1,9 +1,9 @@
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from datetime import datetime 
+from datetime import datetime, timezone 
 from sqlalchemy import DateTime
-from sqlalchemy import Integer, ForeignKey, String, Boolean
+from sqlalchemy import Integer, ForeignKey, String, Boolean, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 
 #--------------table classes (define how to read and write objects to db)------------------------------
@@ -75,6 +75,9 @@ class Household(Base):
     count: Mapped[int | None] = mapped_column(Integer, default=None)
     password: Mapped[str | None] = mapped_column(String)
 
+    #this value is assigned for convenience when a household is registered to a community
+    community_leader_id: Mapped[int | None] = mapped_column(ForeignKey("community_leaders.id"), default=None)
+
 
 #------------------profile classes------------------------------------------------------------
 
@@ -89,6 +92,17 @@ class People_Incident(Base):
     __tablename__ = "people_incidents"
     id: Mapped[int] = mapped_column(ForeignKey("people.id"),primary_key=True)           #this is the same as the primary key for people
     incident_ids: Mapped[list[str]] = mapped_column(ARRAY(String),default=list)         #this string can store the id's of incidents
+
+#this table stores all the emergency reports that are sent to community leaders
+class Emergency_Report(Base):
+    __tablename__ = "emergency_reports"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sender_id: Mapped[int] = mapped_column(ForeignKey("people.id"), nullable=False)                       #the id of the person who submitted the report
+    community_leader_id:  Mapped[int] = mapped_column(ForeignKey("community_leaders.id"), nullable=False) #this is the community leader id taken from 
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    location: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False) #use text field because it can be longer 
+    created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False) #we don't need to ask for this value
 
 #--------------------system settings/info-----------------------------------------------------
 
