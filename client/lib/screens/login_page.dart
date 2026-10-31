@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'household/household_dashboard.dart';
 import 'community_leader/leader_dashboard.dart';
+import '../widgets/auth_dialog.dart';
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
@@ -40,14 +41,20 @@ class LoginPage extends StatelessWidget {
               icon: const Icon(Icons.home),
               label: const Text('Continue as Household'),
               onPressed: () {
-                // pushRenoveUntil is used to clear stack tracking
-                Navigator.pushAndRemoveUntil(
-                  // Add sign in/up 
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const HouseholdDashboard(),
-                  ),
-                  (route) => false,
+                // Triggers the authentication modal popup explicitly configured for Households
+                showLoginDialog(
+                  context, 
+                  isLeader: false, 
+                  onAuthSuccess: () {
+                    // This success callback block fires automatically ONLY upon a valid API response code
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const HouseholdDashboard(),
+                      ),
+                      (route) => false,
+                    );
+                  },
                 );
               },
             ),
@@ -58,12 +65,20 @@ class LoginPage extends StatelessWidget {
               icon: const Icon(Icons.groups),
               label: const Text('Continue as Community Leader'),
               onPressed: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const LeaderDashboard(),
-                  ),
-                  (route) => false,
+                // Triggers the authentication modal popup explicitly configured for Community Leaders
+                showLoginDialog(
+                  context, 
+                  isLeader: true, 
+                  onAuthSuccess: () {
+                    // This success callback block fires automatically ONLY upon a valid API response code
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LeaderDashboard(),
+                      ),
+                      (route) => false,
+                    );
+                  },
                 );
               },
             ),
