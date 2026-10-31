@@ -42,6 +42,7 @@ class LoginPage extends StatelessWidget {
               onPressed: () {
                 // pushRenoveUntil is used to clear stack tracking
                 Navigator.pushAndRemoveUntil(
+                  // Add sign in/up 
                   context,
                   MaterialPageRoute(
                     builder: (context) => const HouseholdDashboard(),
