@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'community_plan_page.dart';
 import '../map_screen.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/community_leader/household_status_card.dart';
@@ -20,11 +22,20 @@ class LeaderDashboard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: const [
+          children: [
             ActiveIncidentsCard(),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              icon: const Icon(Icons.checklist_outlined),
+              label: const Text('Open community plan'),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CommunityPlanPage()),
+              ),
+            ),
             SizedBox(height: 16),
 
-/*
+            /*
             HouseholdStatusCard(),
             SizedBox(height: 16),
 
@@ -39,29 +50,18 @@ class LeaderDashboard extends StatelessWidget {
 
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
-         onDestinationSelected: (index) {
-    if (index == 1) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MapScreen(),
-        ),
-      );
-    }
-  },
+        onDestinationSelected: (index) {
+          if (index == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const MapScreen()),
+            );
+          }
+        },
         destinations: [
-          NavigationDestination(
-            icon: Icon(Icons.warning),
-            label: 'Incidents',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
+          NavigationDestination(icon: Icon(Icons.warning), label: 'Incidents'),
+          NavigationDestination(icon: Icon(Icons.map), label: 'Map'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );

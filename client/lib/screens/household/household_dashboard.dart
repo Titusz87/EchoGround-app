@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'household_plan_page.dart';
 import '../../widgets/household/household_header.dart';
 import '../../widgets/household/current_alert_card.dart';
 import '../../widgets/household/household_status_card.dart';
@@ -18,12 +20,21 @@ class HouseholdDashboard extends StatelessWidget {
         title: const Text('Household Dashboard'),
         centerTitle: true,
       ),
-     body: SingleChildScrollView(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: const [
+          children: [
             HouseholdHeader(),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              icon: const Icon(Icons.checklist_outlined),
+              label: const Text('Open my household plan'),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const HouseholdPlanPage()),
+              ),
+            ),
 
             SizedBox(height: 20),
             /*
@@ -49,28 +60,17 @@ class HouseholdDashboard extends StatelessWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
         onDestinationSelected: (index) {
-    if (index == 2) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const LoginPage(),
-        ),
-      );
-    }
-  },
+          if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginPage()),
+            );
+          }
+        },
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.warning),
-            label: 'Incidents',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
+          NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.warning), label: 'Incidents'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );
