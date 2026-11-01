@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/echoground_banner.dart';
 import 'household/household_dashboard.dart';
 import 'community_leader/leader_dashboard.dart';
 import '../widgets/auth_dialog.dart';
@@ -10,12 +11,20 @@ class LoginPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+<<<<<<< HEAD
         title: const Text('Login'),
+=======
+        title: const Text('EchoGround'),
+>>>>>>> origin/feature/stephen
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
+      body: EchoGroundPageBody(
+        maxWidth: 560,
+        padding: const EdgeInsets.all(24),
+        children: [
+          const EchoGroundBanner(),
+          const SizedBox(height: 28),
+          Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -83,7 +92,8 @@ class LoginPage extends StatelessWidget {
               },
             ),
           ],
-        ),
+          ),
+        ],
       ),
     );
   }

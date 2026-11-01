@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 
 import 'community_plan_page.dart';
+=======
+import '../../widgets/echoground_banner.dart';
+>>>>>>> origin/feature/stephen
 import '../map_screen.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/community_leader/household_status_card.dart';
@@ -14,6 +18,7 @@ class LeaderDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+<<<<<<< HEAD
         title: const Text('Community Leader Dashboard'),
         centerTitle: true,
       ),
@@ -23,6 +28,16 @@ class LeaderDashboard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+=======
+        title: const Text('EchoGround'),
+        centerTitle: true,
+      ),
+
+      body: EchoGroundPageBody(
+        children: const [
+            EchoGroundBanner(),
+            SizedBox(height: 20),
+>>>>>>> origin/feature/stephen
             ActiveIncidentsCard(),
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -44,8 +59,7 @@ class LeaderDashboard extends StatelessWidget {
 
             CommunityTasksCard(),
       */
-          ],
-        ),
+        ],
       ),
 
       bottomNavigationBar: NavigationBar(

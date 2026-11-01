@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'theme/echoground_theme.dart';
 import 'services/notification_service.dart';
 import 'screens/guest_mode/guest_mode_dashboard.dart';
 import 'services/database_helper.dart'; 
@@ -80,12 +81,8 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
-          brightness: Brightness.dark,
-        ),
-      ),
+      title: 'EchoGround',
+      theme: EchoGroundTheme.light,
       home: const GuestModeDashboard(),
     );
   }

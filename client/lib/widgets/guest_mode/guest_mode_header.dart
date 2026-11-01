@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/database_helper.dart';
+=======
+import '../echoground_banner.dart';
+>>>>>>> origin/feature/stephen
 
 class GuestModeHeader extends StatefulWidget {
   const GuestModeHeader({super.key});
@@ -132,6 +136,7 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
 
   @override
   Widget build(BuildContext context) {
+<<<<<<< HEAD
     final theme = Theme.of(context);
 
     return Row(
@@ -143,6 +148,21 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
               const Text(
                 'Hello!',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+=======
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const EchoGroundBanner(),
+        const SizedBox(height: 20),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              'Hello, you are in Guest mode.',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+>>>>>>> origin/feature/stephen
               ),
               const SizedBox(height: 4),
               Row(

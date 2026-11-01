@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 
 import 'household_plan_page.dart';
+=======
+import '../../widgets/echoground_banner.dart';
+>>>>>>> origin/feature/stephen
 import '../../widgets/household/household_header.dart';
 import '../../widgets/household/current_alert_card.dart';
 import '../../widgets/household/household_status_card.dart';
@@ -17,6 +21,7 @@ class HouseholdDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+<<<<<<< HEAD
         title: const Text('Household Dashboard'),
         centerTitle: true,
       ),
@@ -25,6 +30,13 @@ class HouseholdDashboard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+=======
+        title: const Text('EchoGround'),
+        centerTitle: true,
+      ),
+     body: EchoGroundPageBody(
+        children: const [
+>>>>>>> origin/feature/stephen
             HouseholdHeader(),
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -54,8 +66,7 @@ class HouseholdDashboard extends StatelessWidget {
 
             CommunityUpdatesCard(),
             */
-          ],
-        ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
