@@ -61,10 +61,10 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
         theme.colorScheme.surfaceContainer;
 
     return Container(
-      margin: const EdgeInsets.only(left: 6),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      margin: const EdgeInsets.only(left: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
-        color: barColor.withValues(alpha: 0.7),
+        color: barColor.withValues(alpha: 0.55), // lower = more see-through
         borderRadius: BorderRadius.circular(30),
       ),
       child: Column(
@@ -97,33 +97,35 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
         title: const Text('Household Dashboard'),
         centerTitle: true,
       ),
-      body: Row(
+      body: Stack(
         children: [
-          // Side pill, vertically centred on the left
-          Center(child: _sidePill()),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(8, 16, 16, 16),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  HouseholdHeader(),
-                  SizedBox(height: 20),
-                  // Lists live cached database items natively
-                  ActiveIncidentsCard(),
-                  SizedBox(height: 16),
-                  /*
-                  CurrentAlertCard(),
-                  SizedBox(height: 16),
-                  HouseholdStatusCard(),
-                  SizedBox(height: 16),
-                  PreparednessCard(),
-                  SizedBox(height: 16),
-                  CommunityUpdatesCard(),
-                  */
-                ],
-              ),
+          // Content uses the full width
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                HouseholdHeader(),
+                SizedBox(height: 20),
+                // Lists live cached database items natively
+                ActiveIncidentsCard(),
+                SizedBox(height: 16),
+                /*
+                CurrentAlertCard(),
+                SizedBox(height: 16),
+                HouseholdStatusCard(),
+                SizedBox(height: 16),
+                PreparednessCard(),
+                SizedBox(height: 16),
+                CommunityUpdatesCard(),
+                */
+              ],
             ),
+          ),
+          // Side pill floats over the left edge, vertically centred
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _sidePill(),
           ),
         ],
       ),
