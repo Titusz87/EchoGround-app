@@ -42,7 +42,7 @@ class ActiveIncidentsCard extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // FIXED: Removed the inline statusBlueChip row container item block
+                  // Clean header row layout with no trailing info chip badges
                   const Row(
                     children: [
                       Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
@@ -82,8 +82,8 @@ class ActiveIncidentsCard extends StatelessWidget {
                         ),
                       ),
                     )
-                  else ...[
-                    // RESTORED DESIGN EFFECT: Safely renders and labels individual incident elements via your original tiles loop mapping
+                  else
+                    // Safely renders and labels individual incident elements via your original tiles loop mapping
                     ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -92,33 +92,6 @@ class ActiveIncidentsCard extends StatelessWidget {
                       itemBuilder: (context, index) =>
                           IncidentTile(incident: incidents[index]),
                     ),
-                    
-                    const SizedBox(height: 12),
-                    const Divider(color: Colors.white10, height: 1),
-                    const SizedBox(height: 12),
-
-                    // Bottom action row link using your green arrow setup layout parameters
-                    InkWell(
-                      onTap: () {
-                        print('Active Incidents section action triggered.');
-                      },
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.keyboard_arrow_down_rounded, color: mintGreenAccent, size: 18),
-                          SizedBox(width: 4),
-                          Text(
-                            'Configure section',
-                            style: TextStyle(
-                              color: mintGreenAccent,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ],
               );
             },
@@ -128,3 +101,4 @@ class ActiveIncidentsCard extends StatelessWidget {
     );
   }
 }
+
