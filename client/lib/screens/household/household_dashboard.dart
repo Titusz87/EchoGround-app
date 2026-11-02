@@ -99,17 +99,29 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
       ),
       body: Stack(
         children: [
-          // Content uses the full width
           SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                HouseholdHeader(),
-                SizedBox(height: 20),
-                // Lists live cached database items natively
-                ActiveIncidentsCard(),
-                SizedBox(height: 16),
+                const HouseholdHeader(),
+                const SizedBox(height: 20),
+                // Only the incidents card is pushed right, clear of the side pill
+                Padding(
+                  padding: const EdgeInsets.only(left: 44),
+                  child: Builder(
+                    builder: (context) {
+                      final base = Theme.of(context).textTheme;
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          textTheme: base.apply(fontSizeFactor: 0.88),
+                        ),
+                        child: const ActiveIncidentsCard(),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
                 /*
                 CurrentAlertCard(),
                 SizedBox(height: 16),
