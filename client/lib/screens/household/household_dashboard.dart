@@ -3,8 +3,6 @@ import '../../widgets/household/household_header.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../login_page.dart';
 
-//import 'package:maplibre_gl/maplibre_gl.dart';
-
 class HouseholdDashboard extends StatefulWidget {
   const HouseholdDashboard({super.key});
 
@@ -13,14 +11,8 @@ class HouseholdDashboard extends StatefulWidget {
 }
 
 class _HouseholdDashboardState extends State<HouseholdDashboard> {
-  int _sideIndex = 0; // 0 = Checklist, 1 = Community Plan
-
-  void _openCommunityPlan() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginPage()),
-    );
-  }
+  // FIXED: Changed type to int? to support null. Allowing no sidebar selections by default
+  int? _sideIndex; 
 
   Widget _railIcon({
     required IconData icon,
@@ -56,7 +48,6 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
 
   Widget _sidePill() {
     final theme = Theme.of(context);
-    // Same grey as the bottom navigation bar, slightly transparent
     final barColor = theme.navigationBarTheme.backgroundColor ??
         theme.colorScheme.surfaceContainer;
 
@@ -64,7 +55,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
       margin: const EdgeInsets.only(left: 4),
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
-        color: barColor.withValues(alpha: 0.55), // lower = more see-through
+        color: barColor.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Column(
@@ -75,7 +66,12 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
             selectedIcon: Icons.checklist,
             tooltip: 'Checklist',
             selected: _sideIndex == 0,
-            onTap: () => setState(() => _sideIndex = 0),
+            onTap: () {
+              setState(() {
+                // Toggle behavior: Deselect if clicked again
+                _sideIndex = (_sideIndex == 0) ? null : 0;
+              });
+            },
           ),
           const SizedBox(height: 12),
           _railIcon(
@@ -83,7 +79,54 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
             selectedIcon: Icons.groups,
             tooltip: 'Community Plan',
             selected: _sideIndex == 1,
-            onTap: _openCommunityPlan,
+            onTap: () {
+              setState(() {
+                // Toggle behavior: Deselect if clicked again
+                _sideIndex = (_sideIndex == 1) ? null : 1;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Empty structural card container shell matching ActiveIncidentsCard color and frame blueprints
+  Widget _buildEmptyPlaceholderCard(String title, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF14171A), // Matches your incident widget background hex token
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: const Color(0xFF4DB6AC), size: 20),
+              const SizedBox(width: 8),
+              Text(
+                title.toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24.0),
+              child: Text(
+                'No content active in this component panel context.',
+                style: TextStyle(color: Colors.white38, fontSize: 13),
+              ),
+            ),
           ),
         ],
       ),
@@ -106,11 +149,23 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
               children: [
                 const HouseholdHeader(),
                 const SizedBox(height: 20),
-                // Only the incidents card is pushed right, clear of the side pill
+                
+                // DYNAMIC CONTROLLER CONTENT LOOP
                 Padding(
                   padding: const EdgeInsets.only(left: 44),
                   child: Builder(
                     builder: (context) {
+                      // CASE A: Checklist is active
+                      if (_sideIndex == 0) {
+                        return _buildEmptyPlaceholderCard('Checklist Content', Icons.checklist);
+                      }
+                      
+                      // CASE B: Community Plan is active
+                      if (_sideIndex == 1) {
+                        return _buildEmptyPlaceholderCard('Community Plan Details', Icons.groups);
+                      }
+                      
+                      // CASE C: Default/Null State - Render active incidents data block seamlessly
                       final base = Theme.of(context).textTheme;
                       return Theme(
                         data: Theme.of(context).copyWith(
@@ -122,15 +177,6 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                /*
-                CurrentAlertCard(),
-                SizedBox(height: 16),
-                HouseholdStatusCard(),
-                SizedBox(height: 16),
-                PreparednessCard(),
-                SizedBox(height: 16),
-                CommunityUpdatesCard(),
-                */
               ],
             ),
           ),
@@ -142,9 +188,11 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: 0, // Incidents is the active tab
+        selectedIndex: _sideIndex == null ? 0 : -1, // Unselect navigation bar items if side actions are displaying
         onDestinationSelected: (index) {
-          if (index == 1) {
+          if (index == 0) {
+            setState(() => _sideIndex = null); // Return to default active incident panel overview loop
+          } else if (index == 1) {
             // TODO: open the Report page
           } else if (index == 2) {
             // TODO: open the Contacts page
