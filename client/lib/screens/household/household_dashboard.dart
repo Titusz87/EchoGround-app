@@ -4,6 +4,7 @@ import '../../widgets/household/current_alert_card.dart';
 import '../../widgets/household/household_status_card.dart';
 import '../../widgets/household/preparedness_card.dart';
 import '../../widgets/household/community_updates_card.dart';
+import '../../widgets/active_incidents_card.dart';
 import '../login_page.dart';
 
 //import 'package:maplibre_gl/maplibre_gl.dart';
@@ -26,6 +27,10 @@ class HouseholdDashboard extends StatelessWidget {
             HouseholdHeader(),
 
             SizedBox(height: 20),
+            // Lists live cached database items natively
+            ActiveIncidentsCard(),
+
+            SizedBox(height: 16),
             /*
 
             CurrentAlertCard(),
@@ -60,16 +65,19 @@ class HouseholdDashboard extends StatelessWidget {
   },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.home),
-            label: 'Home',
+            icon: Icon(Icons.checklist_outlined),
+            selectedIcon: Icon(Icons.checklist),
+            label: 'Checklist',
           ),
           NavigationDestination(
-            icon: Icon(Icons.warning),
-            label: 'Incidents',
+            icon: Icon(Icons.report_outlined),
+            selectedIcon: Icon(Icons.report),
+            label: 'Report',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person),
-            label: 'Profile',
+            icon: Icon(Icons.groups_outlined),
+            selectedIcon: Icon(Icons.groups),
+            label: 'Community Plan',
           ),
         ],
       ),
