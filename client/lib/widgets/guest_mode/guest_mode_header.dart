@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
 import 'package:http/http.dart' as http;
+
 import 'dart:convert';
+
 import '../../services/database_helper.dart';
-=======
 import '../echoground_banner.dart';
->>>>>>> origin/feature/stephen
 
 class GuestModeHeader extends StatefulWidget {
   const GuestModeHeader({super.key});
@@ -15,8 +14,9 @@ class GuestModeHeader extends StatefulWidget {
 }
 
 class _GuestModeHeaderState extends State<GuestModeHeader> {
-
-  static const String _nativeLandApiKey = String.fromEnvironment('NATIVE_LAND_KEY');
+  static const String _nativeLandApiKey = String.fromEnvironment(
+    'NATIVE_LAND_KEY',
+  );
 
   String _locationText = 'Fetching live location...';
 
@@ -35,9 +35,12 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
 
   Future<void> _loadSavedLocationOnStartup() async {
     try {
-      final savedFullLocation =
-          await DatabaseHelper.instance.getConfig('last_resolved_full_location');
-      if (savedFullLocation != null && savedFullLocation.isNotEmpty && mounted) {
+      final savedFullLocation = await DatabaseHelper.instance.getConfig(
+        'last_resolved_full_location',
+      );
+      if (savedFullLocation != null &&
+          savedFullLocation.isNotEmpty &&
+          mounted) {
         setState(() {
           _locationText = savedFullLocation;
         });
@@ -66,10 +69,12 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
 
       if (cityResponse.statusCode == 200) {
         final Map<String, dynamic> cityData = json.decode(cityResponse.body);
-        final String city = cityData['city']?.toString().trim() ??
+        final String city =
+            cityData['city']?.toString().trim() ??
             cityData['locality']?.toString().trim() ??
             '';
-        final String state = cityData['principalSubdivision']?.toString().trim() ?? '';
+        final String state =
+            cityData['principalSubdivision']?.toString().trim() ?? '';
 
         if (city.isNotEmpty) {
           westernLocation = state.isNotEmpty ? '$city, $state' : city;
@@ -82,7 +87,9 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
       String indigenousTerritory = "";
 
       if (_nativeLandApiKey.isEmpty) {
-        print('NATIVE_LAND_KEY was not provided at build time; skipping Native Land lookup.');
+        print(
+          'NATIVE_LAND_KEY was not provided at build time; skipping Native Land lookup.',
+        );
       } else {
         final nativeLandUrl = Uri.parse(
           'https://native-land.ca/api/index.php'
@@ -94,10 +101,12 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
           final List<dynamic> landData = json.decode(nativeLandResponse.body);
           if (landData.isNotEmpty) {
             final List<String> names = landData
-                .map((item) =>
-                    item['properties']?['Name']?.toString().trim() ??
-                    item['properties']?['name']?.toString().trim() ??
-                    '')
+                .map(
+                  (item) =>
+                      item['properties']?['Name']?.toString().trim() ??
+                      item['properties']?['name']?.toString().trim() ??
+                      '',
+                )
                 .where((name) => name.isNotEmpty)
                 .toList();
 
@@ -125,8 +134,10 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
         setState(() {
           _locationText = combinedResult;
         });
-        await DatabaseHelper.instance
-            .saveConfig('last_resolved_full_location', combinedResult);
+        await DatabaseHelper.instance.saveConfig(
+          'last_resolved_full_location',
+          combinedResult,
+        );
         print("Location text stashed successfully: $combinedResult");
       }
     } catch (e) {
@@ -136,56 +147,33 @@ class _GuestModeHeaderState extends State<GuestModeHeader> {
 
   @override
   Widget build(BuildContext context) {
-<<<<<<< HEAD
     final theme = Theme.of(context);
-
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Hello!',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-=======
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const EchoGroundBanner(),
         const SizedBox(height: 20),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'Hello, you are in Guest mode.',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
->>>>>>> origin/feature/stephen
+        const Text(
+          'Hello, you are in Guest mode.',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(Icons.location_on, size: 16, color: theme.colorScheme.primary),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                _locationText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.location_on,
-                    size: 16,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      _locationText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14, color: Colors.white70),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );

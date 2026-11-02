@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
 
 import 'household_plan_page.dart';
-=======
 import '../../widgets/echoground_banner.dart';
->>>>>>> origin/feature/stephen
 import '../../widgets/household/household_header.dart';
 import '../../widgets/household/current_alert_card.dart';
 import '../../widgets/household/household_status_card.dart';
@@ -20,36 +17,22 @@ class HouseholdDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-<<<<<<< HEAD
-        title: const Text('Household Dashboard'),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-=======
-        title: const Text('EchoGround'),
-        centerTitle: true,
-      ),
-     body: EchoGroundPageBody(
-        children: const [
->>>>>>> origin/feature/stephen
-            HouseholdHeader(),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              icon: const Icon(Icons.checklist_outlined),
-              label: const Text('Open my household plan'),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const HouseholdPlanPage()),
-              ),
+      appBar: AppBar(title: const Text('EchoGround'), centerTitle: true),
+      body: EchoGroundPageBody(
+        children: [
+          HouseholdHeader(),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            icon: const Icon(Icons.checklist_outlined),
+            label: const Text('Open my household plan'),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HouseholdPlanPage()),
             ),
+          ),
 
-            SizedBox(height: 20),
-            /*
+          SizedBox(height: 20),
+          /*
 
             CurrentAlertCard(),
 

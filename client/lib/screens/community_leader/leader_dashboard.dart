@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
+
+import '../../widgets/community_leader/community_coming_soon.dart';
 
 import 'community_plan_page.dart';
-=======
 import '../../widgets/echoground_banner.dart';
->>>>>>> origin/feature/stephen
 import '../map_screen.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/community_leader/household_status_card.dart';
@@ -17,29 +16,15 @@ class LeaderDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-<<<<<<< HEAD
-        title: const Text('Community Leader Dashboard'),
-        centerTitle: true,
-      ),
-
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-=======
-        title: const Text('EchoGround'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('EchoGround'), centerTitle: true),
 
       body: EchoGroundPageBody(
-        children: const [
-            EchoGroundBanner(),
-            SizedBox(height: 20),
->>>>>>> origin/feature/stephen
-            ActiveIncidentsCard(),
-            const SizedBox(height: 16),
+        children: [
+          EchoGroundBanner(),
+          SizedBox(height: 20),
+          ActiveIncidentsCard(),
+          const SizedBox(height: 16),
+          if (communityPlanningAvailable)
             FilledButton.icon(
               icon: const Icon(Icons.checklist_outlined),
               label: const Text('Open community plan'),
@@ -47,10 +32,12 @@ class LeaderDashboard extends StatelessWidget {
                 context,
                 MaterialPageRoute(builder: (_) => const CommunityPlanPage()),
               ),
-            ),
-            SizedBox(height: 16),
+            )
+          else
+            const CommunityComingSoon(),
+          SizedBox(height: 16),
 
-            /*
+          /*
             HouseholdStatusCard(),
             SizedBox(height: 16),
 

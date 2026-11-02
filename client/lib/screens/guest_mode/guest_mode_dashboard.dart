@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../widgets/echoground_banner.dart';
 import '../../widgets/guest_mode/guest_mode_header.dart';
 import '../../widgets/household/current_alert_card.dart';
@@ -16,25 +17,18 @@ class GuestModeDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-<<<<<<< HEAD
-        title: const Text('Guest Mode'),
-=======
-        title: const Text('EchoGround'),
->>>>>>> origin/feature/stephen
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('EchoGround'), centerTitle: true),
       body: EchoGroundPageBody(
         children: const [
-            GuestModeHeader(),
+          GuestModeHeader(),
 
-            SizedBox(height: 20),
+          SizedBox(height: 20),
 
-            // Lists live cached database items natively
-            ActiveIncidentsCard(),
+          // Lists live cached database items natively
+          ActiveIncidentsCard(),
 
-            SizedBox(height: 16),
-            /*
+          SizedBox(height: 16),
+          /*
 
             CurrentAlertCard(),
 
@@ -59,28 +53,16 @@ class GuestModeDashboard extends StatelessWidget {
           if (index == 2) {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => const LoginPage(),
-              ),
+              MaterialPageRoute(builder: (context) => const LoginPage()),
             );
           }
         },
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.warning),
-            label: 'Incidents',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
+          NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.warning), label: 'Incidents'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );
   }
 }
-

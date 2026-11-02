@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/community_leader/community_coming_soon.dart';
+
 import '../planning_security_page.dart';
 
 import '../../models/preparedness_plan.dart';
@@ -21,7 +23,7 @@ class _CommunityPlanPageState extends State<CommunityPlanPage> {
   @override
   void initState() {
     super.initState();
-    load();
+    if (communityPlanningAvailable) load();
   }
 
   Future<void> load() async {
@@ -135,6 +137,15 @@ class _CommunityPlanPageState extends State<CommunityPlanPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!communityPlanningAvailable) {
+      return PlanningShell(
+        title: 'Community tools',
+        child: ListView(
+          padding: const EdgeInsets.all(18),
+          children: const [CommunityComingSoon()],
+        ),
+      );
+    }
     final p = plan;
     final rows = summaries.where((r) => r.containsKey('status')).toList();
     return PlanningShell(
