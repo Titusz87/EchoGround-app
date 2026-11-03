@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'services/notification_service.dart';
 import 'screens/guest_mode/guest_mode_dashboard.dart';
 import 'services/database_helper.dart'; 
+import 'screens/app_gatekeeper.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 // Modern conditional import: Swaps out the blank mobile stub for the real web listener when running on a browser
@@ -12,11 +13,8 @@ void initializeNotificationDatabaseSync() async {
   // CASE 1: App is open/active in the foreground
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
     try {
-      // Safely check if message or message.data is null first
       if (message.data != null) {
-        // Force conversion to a clean, modifiable Dart Map
         final Map<String, dynamic> cleanData = Map<String, dynamic>.from(message.data);
-        
         if (cleanData.isNotEmpty) {
           print("Foreground raw payload sanitized safely. Ingesting row entries...");
           await DatabaseHelper.instance.insertNotification(cleanData);
@@ -48,7 +46,6 @@ void initializeNotificationDatabaseSync() async {
   }
 }
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -69,9 +66,6 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    // Fire off the automated location tracking loops
-    NotificationService.setupPushNotifications(context);
-    
     // Activate the cross-platform SQLite background listener tracking loops
     initializeNotificationDatabaseSync();
   }
@@ -86,7 +80,14 @@ class _MyAppState extends State<MyApp> {
           brightness: Brightness.dark,
         ),
       ),
-      home: const GuestModeDashboard(),
+      //  Swapped out GuestModeDashboard() to place the gatekeeper in control on system boots!
+      home: Builder(
+        builder: (context) {
+          // Fire off the automated location tracking loops safely inside a layout builder context shell
+          NotificationService.setupPushNotifications(context);
+          return const AppGatekeeper();
+        },
+      ),
     );
   }
 }
