@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../widgets/household/household_header.dart';
+//import '../../widgets/household/household_header.dart';
+import '../../widgets/dynamic_dashboard_header.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../login_page.dart'; // Import to safely launch the Login screen
 
@@ -144,7 +145,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const HouseholdHeader(),
+                const DynamicDashboardHeader(),
                 const SizedBox(height: 20),
                 
                 Padding(

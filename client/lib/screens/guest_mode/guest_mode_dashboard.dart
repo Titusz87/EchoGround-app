@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../widgets/guest_mode/guest_mode_header.dart';
+//import '../../widgets/guest_mode/guest_mode_header.dart';
+import '../../widgets/dynamic_dashboard_header.dart';
 import '../../widgets/household/current_alert_card.dart';
 import '../../widgets/household/household_status_card.dart';
 import '../../widgets/household/preparedness_card.dart';
@@ -24,7 +25,7 @@ class GuestModeDashboard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: const [
-            GuestModeHeader(),
+            DynamicDashboardHeader(),
 
             SizedBox(height: 20),
 
