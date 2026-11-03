@@ -27,13 +27,14 @@ class Incident:
             self.id = id
             self.event_type = properties["eventType"]
             self.status = properties["status"]
-            self.warning_level = properties["warningLevel"]
+            
             self.state = properties["location"]["state"]
             self.latitude = properties["location"]["latitude"]
             self.longitude = properties["location"]["longitude"]
             self.last_updated = datetime.fromisoformat(properties["timestamps"]["updated"]) #we need to create time variables for some fields 
             
-            #these fields may not have any data     
+            #these fields may not have any data   
+            self.warning_level = properties.get("warningLevel", "N/A") 
             self.description = properties["details"].get("description") #.get() is used for safety
             self.address = properties["location"].get("address")
             self.reported_time = (
@@ -50,7 +51,7 @@ class Incident:
             
             #incidents are never fake from this source and start with no validation
             self.test_incident = False
-            self.validated_by = []
+            self.validated_by = {}
         
         except Exception as e:
             print("Error creating Incident object from polling")

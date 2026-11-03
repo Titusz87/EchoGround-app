@@ -1,9 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.services.login import verify_person_creds
 from app import models
 from app.database import get_session
-from app.services.create_records import create_community_leader
+from app.services.create_records import create_community_leader, create_community_plans
 from app.routers.household import LoginRequest
 from app.services.login import login
 from app.services import db_helpers as db
@@ -26,17 +26,13 @@ class CommunityLeaderCreationRequest(BaseModel):
 def register_community_leader(data: CommunityLeaderCreationRequest):
 
     verification = verify_person_creds(data.id)#, data.fcm_token)
-
     if verification is not True:
-        return {
-            "status": "failure",
-            "message": verification,
-        }
+        raise HTTPException(status_code=401, detail= verification)
 
     #now try to make the cl
     message = create_community_leader(data.id, data.first_name, data.phone, data.password, data.community_name)        
     if message is not True:
-        return {"status": "failure", "message": message}
+        raise HTTPException(status_code=401, detail= message)
 
     return {
         "status": "ok",
@@ -51,10 +47,7 @@ def log_into_community_leader(data: LoginRequest):
     #try to login
     row = login(data.id, data.password, models.Community_Leader)
     if not row:
-        return {
-            "status": "failure",
-            "message": "phone number and password pair do not match",
-        }
+        raise HTTPException(status_code=401, detail= "phone number and password pair do not match")
 
     #now that login is successful, we can return whatever data we want 
     #TODO: use the id to retrieve profile data and send it here
@@ -73,13 +66,15 @@ class CommunityLeaderIncidentRequest(BaseModel):
 def get_all_incidents_affecting_the_community(data:CommunityLeaderIncidentRequest):
     with get_session() as session:
 
+        #verify id exists
+        verification = verify_person_creds(data.id)
+        if verification is not True:
+            raise HTTPException(status_code=401, detail= verification)
+
         #verify community leader exists
         community_leader = session.get(models.Community_Leader, data.id)
         if community_leader is None:
-            return {
-                "status": "failure",
-                "message": "Community leader id does not exist in db records",
-                }
+            raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
 
         #retrieve the list of ids (people)
         community_member_ids = db.get_value_by_id(session, models.Community_Leader, community_leader.id, "community_members")
@@ -107,32 +102,73 @@ def get_all_incidents_affecting_the_community(data:CommunityLeaderIncidentReques
 class CommunityLeaderValidateIncidentRequest(BaseModel):
     id: int
     validated_incidents: list[str]
+    notice: str | None = None
 
 @router.put("/community-leader/validate-incidents")
 def update_incidents_to_be_validated_by_community_leader(data: CommunityLeaderValidateIncidentRequest):
     with get_session() as session:
 
+        #verify id exists
+        verification = verify_person_creds(data.id)
+        if verification is not True:
+            raise HTTPException(status_code=401, detail= verification)
+
         #verify community leader exists
         community_leader = session.get(models.Community_Leader, data.id)
         if community_leader is None:
-            return {
-                "status": "failure",
-                "message": "Community leader id does not exist in db records",
-                }
+            raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
 
         #first retrieve the incidents from the db using the inputted list
         incidents = db.get_rows_from_ids(session, models.Current_Incident, data.validated_incidents)
 
-        #now, for each incident, include the communities name in the 'validated_by' list in the incident row
+        #now, for each incident, include the communities name in the 'validated_by' dictionary in the incident row
+        #optionally, include a 'notice' as the value in the dict 
         for incident in incidents:
             #do this dumb logic again to make it safe
-            validated_by = list(incident.validated_by or [])
-            if community_leader.community_name not in validated_by:
-                validated_by.append(community_leader.community_name)
+            validated_by = dict(incident.validated_by or {})
+            if community_leader.community_name not in list(validated_by):
+                validated_by[community_leader.community_name] = data.notice
                 incident.validated_by = validated_by
         session.commit()
 
         return {
             "status": "ok",
-            "message": f"updated {len(incidents)} incidents in the db to be validated by '{community_leader.community_name}'",
+            "message": f"updated {len(incidents)} incidents in the db to be validated by '{community_leader.community_name}' with notice '{data.notice}'"
             }
+
+#------------------------------------------------------------------------------------------------
+
+class CommunityLeaderPlanCreationRequest(BaseModel):
+    id: int
+    body: str
+    
+@router.post("/community-leader/create-community-plans")
+def create_community_specific_plans(data: CommunityLeaderPlanCreationRequest):
+    with get_session() as session:
+
+        #verify id exists
+        verification = verify_person_creds(data.id)
+        if verification is not True:
+            raise HTTPException(status_code=401, detail= verification)
+
+        #check community leader exists
+        community_leader = session.get(models.Community_Leader, data.id)
+        if community_leader is None:
+            raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
+
+        #now, we can submit the plans 
+        create_community_plans(community_leader.id, community_leader.community_name, data.body)
+        return {
+            "status": "ok",
+            "message": f"created community plans for {community_leader.community_name}"
+            }
+
+#TODO: this
+
+class CommunityLeaderPublishNotificationRequest(BaseModel):
+    id: int
+    body: str
+
+@router.post("/community-leader/publish-notification")
+def send_a_notification_to_all_community_members(data: CommunityLeaderPublishNotificationRequest):
+    pass
