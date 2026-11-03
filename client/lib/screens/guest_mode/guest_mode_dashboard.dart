@@ -16,7 +16,7 @@ class GuestModeDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Guest Mode Dashboard'),
+        title: const Text('Guest Mode'),
         centerTitle: true,
       ),
       body: SingleChildScrollView(

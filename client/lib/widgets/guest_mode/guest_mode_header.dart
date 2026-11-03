@@ -11,8 +11,7 @@ class GuestModeHeader extends StatefulWidget {
 }
 
 class _GuestModeHeaderState extends State<GuestModeHeader> {
-  // Injected at build time with: --dart-define=NATIVE_LAND_KEY=your_key
-  // (in GitHub Actions: --dart-define=NATIVE_LAND_KEY=${{ secrets.NATIVE_LAND_KEY }})
+
   static const String _nativeLandApiKey = String.fromEnvironment('NATIVE_LAND_KEY');
 
   String _locationText = 'Fetching live location...';
