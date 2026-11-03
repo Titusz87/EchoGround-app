@@ -3,6 +3,7 @@ import '../login_page.dart';
 import '../../widgets/report_dialog.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/dark_plan_layout.dart';
+import '../../widgets/community_leader/community_plan_editor.dart';
 
 class LeaderDashboard extends StatefulWidget {
   const LeaderDashboard({super.key});
@@ -12,7 +13,9 @@ class LeaderDashboard extends StatefulWidget {
 
 class _LeaderDashboardState extends State<LeaderDashboard> {
   int? _sideIndex;
-  static const _sections = [
+  final _planDraft = CommunityPlanDraft();
+  List<PlanSection> get _sections => [
+    PlanSection('Community plan', 'Community evacuation arrangements.', Icons.description_outlined, content: CommunityPlanEditor(draft: _planDraft)),
     PlanSection('Notifications', 'Community notices and updates for linked households.', Icons.notifications_outlined),
     PlanSection('Household preparedness plan', 'Household preparedness summaries and completion status.', Icons.fact_check_outlined),
     PlanSection('Privacy & security', 'Privacy and security options will be available in a future release.', Icons.privacy_tip_outlined),
