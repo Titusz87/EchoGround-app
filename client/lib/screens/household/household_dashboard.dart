@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../widgets/household/household_header.dart';
 import '../../widgets/active_incidents_card.dart';
-import '../login_page.dart';
+import '../login_page.dart'; // Import to safely launch the Login screen
 
 class HouseholdDashboard extends StatefulWidget {
   const HouseholdDashboard({super.key});
@@ -11,7 +11,7 @@ class HouseholdDashboard extends StatefulWidget {
 }
 
 class _HouseholdDashboardState extends State<HouseholdDashboard> {
-  // FIXED: Changed type to int? to support null. Allowing no sidebar selections by default
+  // Configured with type int? to allow no sidebar selections by default
   int? _sideIndex; 
 
   Widget _railIcon({
@@ -68,7 +68,6 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
             selected: _sideIndex == 0,
             onTap: () {
               setState(() {
-                // Toggle behavior: Deselect if clicked again
                 _sideIndex = (_sideIndex == 0) ? null : 0;
               });
             },
@@ -81,7 +80,6 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
             selected: _sideIndex == 1,
             onTap: () {
               setState(() {
-                // Toggle behavior: Deselect if clicked again
                 _sideIndex = (_sideIndex == 1) ? null : 1;
               });
             },
@@ -91,12 +89,11 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
     );
   }
 
-  /// Empty structural card container shell matching ActiveIncidentsCard color and frame blueprints
   Widget _buildEmptyPlaceholderCard(String title, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF14171A), // Matches your incident widget background hex token
+        color: const Color(0xFF14171A), 
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white10, width: 1),
       ),
@@ -150,22 +147,17 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                 const HouseholdHeader(),
                 const SizedBox(height: 20),
                 
-                // DYNAMIC CONTROLLER CONTENT LOOP
                 Padding(
                   padding: const EdgeInsets.only(left: 44),
                   child: Builder(
                     builder: (context) {
-                      // CASE A: Checklist is active
                       if (_sideIndex == 0) {
                         return _buildEmptyPlaceholderCard('Checklist Content', Icons.checklist);
                       }
-                      
-                      // CASE B: Community Plan is active
                       if (_sideIndex == 1) {
                         return _buildEmptyPlaceholderCard('Community Plan Details', Icons.groups);
                       }
                       
-                      // CASE C: Default/Null State - Render active incidents data block seamlessly
                       final base = Theme.of(context).textTheme;
                       return Theme(
                         data: Theme.of(context).copyWith(
@@ -180,41 +172,54 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
               ],
             ),
           ),
-          // Side pill floats over the left edge, vertically centred
           Align(
             alignment: Alignment.centerLeft,
             child: _sidePill(),
           ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _sideIndex == null ? 0 : -1, // Unselect navigation bar items if side actions are displaying
-        onDestinationSelected: (index) {
-          if (index == 0) {
-            setState(() => _sideIndex = null); // Return to default active incident panel overview loop
-          } else if (index == 1) {
-            // TODO: open the Report page
-          } else if (index == 2) {
-            // TODO: open the Contacts page
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.crisis_alert_outlined),
-            selectedIcon: Icon(Icons.crisis_alert),
-            label: 'Incidents',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.report_outlined, color: Colors.redAccent, size: 34),
-            selectedIcon: Icon(Icons.report, color: Colors.redAccent, size: 34),
-            label: 'Report',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.contacts_outlined),
-            selectedIcon: Icon(Icons.contacts),
-            label: 'Contacts',
-          ),
-        ],
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(
+          navigationBarTheme: _sideIndex != null
+              ? const NavigationBarThemeData(
+                  indicatorColor: Colors.transparent, 
+                )
+              : Theme.of(context).navigationBarTheme,
+        ),
+        child: NavigationBar(
+          selectedIndex: 0, 
+          onDestinationSelected: (index) {
+            if (index == 0) {
+              setState(() => _sideIndex = null); 
+            } else if (index == 1) {
+              // TODO: open the Report page
+            } else if (index == 2) {
+              // FIXED: Replaced old Contacts action routing. Now launches your custom LoginPage screen context
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginPage()),
+              );
+            }
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.crisis_alert_outlined),
+              selectedIcon: Icon(Icons.crisis_alert),
+              label: 'Incidents',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.report_outlined, color: Colors.redAccent, size: 34),
+              selectedIcon: Icon(Icons.report, color: Colors.redAccent, size: 34),
+              label: 'Report',
+            ),
+            // FIXED: Replaced "Contacts" layout destination item properties with "Profile"
+            NavigationDestination(
+              icon: Icon(Icons.account_circle_outlined),
+              selectedIcon: Icon(Icons.account_circle),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }
