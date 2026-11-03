@@ -4,7 +4,8 @@ from sqlalchemy.orm import mapped_column
 from datetime import datetime, timezone 
 from sqlalchemy import DateTime
 from sqlalchemy import Integer, ForeignKey, String, Boolean, Text
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSON
+from typing import Any
 
 #--------------table classes (define how to read and write objects to db)------------------------------
 
@@ -32,7 +33,7 @@ class Incident(Base):
     address: Mapped[str | None]
     created: Mapped[datetime] #this value is created by our program in case 'expires' is null  
     test_incident: Mapped[bool] = mapped_column(Boolean, default=False) #this is a value we can use to track whether we've purposely created a fake incident for testing 
-    validated_by: Mapped[list[str]] = mapped_column(ARRAY(String),default=list) #incidents have a list of community names that they are validated by
+    validated_by: Mapped[dict] = mapped_column(JSON, default=dict) #use a dictionary to save notice messages from community leaders
 
 #these 3 tables inherit from the incident class
 #Current_Incident stores the incidents that are in progress
@@ -104,6 +105,13 @@ class Emergency_Report(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False) #use text field because it can be longer 
     created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False) #we don't need to ask for this value
 
+class Community_Posts(Base):
+    __tablename__ = "community_posts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    community_leader_id:  Mapped[int] = mapped_column(ForeignKey("community_leaders.id"), nullable=False)         #this is the community leader id that submitted the post
+    community_name: Mapped[str] = mapped_column(String, nullable=False)   #this value for convenience 
+    post_type: Mapped[str] =  mapped_column(String, nullable=False)                                               #determine what kind of data it is in the routes 
+    data:Mapped[Any] = mapped_column(JSON, default=dict, nullable=False)                                          #flexible data inputs 
 #--------------------system settings/info-----------------------------------------------------
 
 #using this instead of global vars for the programs behavior 
@@ -113,7 +121,7 @@ class SystemSettings(Base):
 
     #db functionality
     write_to_db: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    delete_all_tables: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    delete_all_tables: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     fcm_token_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False) #track whether users need their fcm token to be correct when doing stuff like logging in
 
     #controls polling behavior
