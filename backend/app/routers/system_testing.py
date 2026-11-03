@@ -85,10 +85,7 @@ async def poll_dataquoll(sync_db: bool):
     
     #can't poll while it's polling
     if dataquoll.poll_lock.locked():
-        return {
-            "status": "failure",
-            "message": "Polling is already in progress."
-        }
+        raise HTTPException(status_code=409, detail= "Polling is already in progress.")
     
     #reset global var and call polling fn 
     system_settings.set("write_to_db", sync_db)

@@ -60,12 +60,8 @@ def update_location(data: LocationUpdateRequest):
             "status": "ok",
             "message": f"Location of person {data.id} updated successfully",
         }
-
-    return {
-        "status": "failure",
-        "message": f"{status}",
-    }
     
+    raise HTTPException(status_code=401, detail=status)
     
    
 #----------------------------------------------------------------------------------
@@ -139,10 +135,7 @@ def update_a_users_fcm_token(data: TokenChangeRequest):
         #first check whether the id exists. if it does, update it
         row = session.get(models.People, data.id)
         if row is None:
-            return {
-                "status": "failure", 
-                "message": "id not found in database"
-            }
+            raise HTTPException(status_code=404, detail="id not found in database")
 
         row.fcm_token = data.new_token
         session.commit()

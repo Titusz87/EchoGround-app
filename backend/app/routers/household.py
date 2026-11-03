@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from app.services.login import verify_person_creds
 from app import models
@@ -26,15 +26,12 @@ def register_household(data: HouseholdCreationRequest):
 
     verification = verify_person_creds(data.id) #data.fcm_token)
     if verification is not True:
-        return {
-            "status": "failure",
-            "message": verification,
-        }
+        raise HTTPException(status_code=404, detail=verification)
 
     #now try to make the household
     success = create_household(data.id, data.last_name, data.phone, data.count, data.password)        
     if not success:
-        return {"status": "failure", "message": "Person id already has a household"}
+        raise HTTPException(status_code=401, detail="Person id already has a household")
 
     return {
         "status": "ok",
@@ -52,10 +49,7 @@ def log_into_household(data: LoginRequest):
     #try to login
     row = login(data.id, data.password, models.Household)
     if not row:
-        return {
-            "status": "failure",
-            "message": "phone number and password pair do not match",
-        }
+        raise HTTPException(status_code=401, detail="incorrect login details")
 
     #now that login is successful, we can return whatever data we want 
     #TODO: use the id to retrieve profile data and send it here
@@ -90,40 +84,29 @@ def register_household_to_community(data: CommunityRegistrationRequest):
     with get_session() as session:
 
         #default safety check to check the person exists
-        verification = verify_person_creds(data.id) #data.fcm_token)
+        verification = verify_person_creds(data.id)
         if verification is not True:
-            return {
-                "status": "failure",
-                "message": verification,
-            }
-        
+            raise HTTPException(status_code=404, detail=verification)
+
         #we know that the community name must exist because the front end received a list of all the names
         #this would be a problem if community leaders could be deleted, but for the prototype we aren't implementing this
 
         #the community names are also unique due to the way they are created
         community_leader = db.get_db_rows_by_all_fields(session, models.Community_Leader, {"community_name": data.community_name}) #this returns a list
         if len(community_leader) == 0:
-            return{
-                    "status": "failure",
-                    "message" : f"community name '{data.community_name}' not found in database"
-            }
+            raise HTTPException(status_code=404, detail= f"community name '{data.community_name}' not found in database")
+
         community_leader = community_leader[0]
             
         #we know this exists because the household is logged in by this point. but just in case...
         household = session.get(models.Household, data.id)
         if household is None:
-            return {
-                "status": "failure",
-                "message" : f"id:{data.id} does not have a household"
-            }
+            raise HTTPException(status_code=404, detail= f"id:{data.id} does not have a household")
 
         #check the household isn't already signed up, otherwise append the id
         if data.id in community_leader.community_members:
-            return {
-                "status": "failure",
-                "message" : f"{household.last_name} household is already a member of {community_leader.community_name}"
-            }
-
+            raise HTTPException(status_code=404, detail= f"{household.last_name} household is already a member of {community_leader.community_name}")
+ 
         #safely add the id without duplicates
         #we need to do this to append to Postgres arrays
         members = list(community_leader.community_members or [])
@@ -154,30 +137,21 @@ def send_emergency_report_to_db(data: EmergencyReportRegistrationRequest):
         #default safety check to check the person exists
         verification = verify_person_creds(data.id) #data.fcm_token)
         if verification is not True:
-            return {
-                "status": "failure",
-                "message": verification,
-            }            
+             raise HTTPException(status_code=404, detail= verification)
+               
         #check that the household exits. It should, because this route will be used on the household dashboard
         household = session.get(models.Household, data.id)
         if household is None:
-            return {
-                "status": "failure",
-                "message" : f"id:{data.id} does not have a household"
-            }
+            raise HTTPException(status_code=404, detail= f"id:{data.id} does not have a household")
+
         #now that we know there is a valid household, check whether it belongs to a community
         if household.community_leader_id is None:
-            return {
-                "status": "failure",
-                "message" : f"household '{household.last_name}' does not belong to a community"
-            }
+            raise HTTPException(status_code=401, detail= f"household '{household.last_name}' does not belong to a community")
+
         #now we can create the actual report 
         creation_status = create_emergency_report(data.id, household.community_leader_id, data.title, data.location, data.description)
         if creation_status is not True:
-            return {
-                "status": "failure",
-                "message" : "Failed to submit emergency report"
-            }
+            raise HTTPException(status_code=404, detail= "Failed to submit emergency report")
 
         community_leader = session.get(models.Community_Leader, household.community_leader_id)
         return {

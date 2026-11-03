@@ -93,4 +93,20 @@ def create_emergency_report(_sender_id, _community_leader_id, _title, _location,
         print(f"Successfully created emergency report '{emergency_report.title}'")
         return True
 
+def create_community_plans(_community_leader_id, _community_name, _data):
+    with get_session() as session:
+        
+        community_plans = models.Community_Posts(
+                community_leader_id = _community_leader_id,
+                community_name = _community_name,   
+                post_type = "plans",
+                data = _data 
+                )
+        session.add(community_plans)
+        session.commit()
+        print(f"Successfully created community plans for {_community_name}")
+        return True
 
+
+        
+      
