@@ -182,7 +182,7 @@ class NotificationService {
     final url = Uri.parse('$backendBaseUrl/person/update-token');
     
     try {
-      final response = await http.post(
+      final response = await http.patch(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({

@@ -66,12 +66,18 @@ app = FastAPI(
 # Explicitly bind middleware directly onto the app container instance 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://titusz87.github.io", "http://localhost"], # Trust GitHub Pages production domain and local workspace
+    allow_origins=[
+        "https://titusz87.github.io", 
+        "http://localhost", 
+        "http://127.0.0.1"
+    ],
+    # Matches any dynamic local port combination instantly (e.g., :58940)
+    allow_origin_regex=r"http://localhost:\d+|http://127.0.0.1:\d+", 
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"], # Explicitly declare permitted preflight methods
+    allow_methods=["*"], 
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=600, # Cache preflight responses for 10 minutes to reduce network overhead
+    max_age=600, 
 )
 
 # ---- GLOBAL PREFLIGHT INTERCEPTOR ----
