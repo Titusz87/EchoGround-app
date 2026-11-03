@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 //import '../../widgets/household/household_header.dart';
 import '../../widgets/dynamic_dashboard_header.dart';
 import '../../widgets/active_incidents_card.dart';
-import '../login_page.dart'; // Import to safely launch the Login screen
+import '../login_page.dart';
+import '../../widgets/report_dialog.dart';
 
 class HouseholdDashboard extends StatefulWidget {
   const HouseholdDashboard({super.key});
@@ -193,9 +194,9 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
             if (index == 0) {
               setState(() => _sideIndex = null); 
             } else if (index == 1) {
-              // TODO: open the Report page
+              showReportDialog(context);
             } else if (index == 2) {
-              // FIXED: Replaced old Contacts action routing. Now launches your custom LoginPage screen context
+              
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const LoginPage()),
