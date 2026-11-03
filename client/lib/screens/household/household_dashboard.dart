@@ -1,72 +1,46 @@
+import '../../widgets/privacy_security_options.dart';
 import 'package:flutter/material.dart';
+import '../../widgets/active_incidents_card.dart';
+import '../../widgets/dark_plan_layout.dart';
 
-import 'household_plan_page.dart';
-import '../../widgets/echoground_banner.dart';
-import '../../widgets/household/household_header.dart';
-import '../../widgets/household/current_alert_card.dart';
-import '../../widgets/household/household_status_card.dart';
-import '../../widgets/household/preparedness_card.dart';
-import '../../widgets/household/community_updates_card.dart';
-import '../login_page.dart';
-
-//import 'package:maplibre_gl/maplibre_gl.dart';
-
-class HouseholdDashboard extends StatelessWidget {
+class HouseholdDashboard extends StatefulWidget {
   const HouseholdDashboard({super.key});
+  @override
+  State<HouseholdDashboard> createState() => _HouseholdDashboardState();
+}
+
+class _HouseholdDashboardState extends State<HouseholdDashboard> {
+  int? _sideIndex;
+  static const _sections = [
+    PlanSection('Household checklist', 'Prepare the supplies your household may need when evacuating.', Icons.checklist_outlined),
+    PlanSection('Household preparedness plan', 'Plan evacuation arrangements and prepare your dwelling.', Icons.home_outlined),
+    PlanSection('Community contact', 'Contact details for your community contact.', Icons.contact_phone_outlined),
+    PlanSection('Privacy & security', 'Choose what you share.', Icons.privacy_tip_outlined, content: PrivacySecurityOptions()),
+  ];
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('EchoGround'), centerTitle: true),
-      body: EchoGroundPageBody(
-        children: [
-          HouseholdHeader(),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            icon: const Icon(Icons.checklist_outlined),
-            label: const Text('Open my household plan'),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const HouseholdPlanPage()),
-            ),
-          ),
-
-          SizedBox(height: 20),
-          /*
-
-            CurrentAlertCard(),
-
-            SizedBox(height: 16),
-
-            HouseholdStatusCard(),
-
-            SizedBox(height: 16),
-            
-
-            PreparednessCard(),
-
-            SizedBox(height: 16),
-
-            CommunityUpdatesCard(),
-            */
-        ],
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Household Dashboard'), centerTitle: true),
+    body: DarkPlanLayout(
+      sections: _sections,
+      selectedIndex: _sideIndex,
+      onSelected: (index) => setState(() => _sideIndex = index),
+      incidents: Theme(
+        data: Theme.of(context).copyWith(textTheme: Theme.of(context).textTheme.apply(fontSizeFactor: 0.88)),
+        child: const ActiveIncidentsCard(),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (index) {
-          if (index == 2) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const LoginPage()),
-            );
-          }
-        },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.warning), label: 'Incidents'),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-      ),
-    );
-  }
+    ),
+    bottomNavigationBar: NavigationBar(
+      selectedIndex: 0,
+      onDestinationSelected: (index) {
+        if (index == 0) setState(() => _sideIndex = null);
+        // Report and Profile retain the team's existing placeholder behaviour.
+      },
+      destinations: const [
+        NavigationDestination(icon: Icon(Icons.crisis_alert_outlined), selectedIcon: Icon(Icons.crisis_alert_outlined), label: 'Incidents'),
+        NavigationDestination(icon: Icon(Icons.report_outlined, color: Colors.redAccent, size: 34), selectedIcon: Icon(Icons.report_outlined, color: Colors.redAccent, size: 34), label: 'Report'),
+        NavigationDestination(icon: Icon(Icons.contacts_outlined), selectedIcon: Icon(Icons.contacts_outlined), label: 'Profile'),
+      ],
+    ),
+  );
 }
