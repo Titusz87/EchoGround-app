@@ -23,34 +23,19 @@ class CommunityComingSoon extends StatelessWidget {
       const SizedBox(height: 16),
       for (final feature in const <(IconData, String, String)>[
         (
-          Icons.groups_outlined,
-          'Community setup',
-          'Community details and planning arrangements.',
-        ),
-        (
-          Icons.home_outlined,
-          'Household readiness',
-          'Household plan completion and preparedness summaries.',
-        ),
-        (
-          Icons.business_outlined,
-          'Building preparedness',
-          'Community building and outside-area checklists.',
+          Icons.notifications_outlined,
+          'Notifications',
+          'Community notices and updates for linked households.',
         ),
         (
           Icons.fact_check_outlined,
-          'Residents’ roll call',
-          'An incident roll based on the default resident list.',
-        ),
-        (
-          Icons.person_add_outlined,
-          'Incident guests',
-          'Guest registration and incident-specific attendance.',
+          'Household preparedness plan',
+          'Household preparedness summaries and completion status.',
         ),
         (
           Icons.privacy_tip_outlined,
-          'Community sharing & privacy',
-          'Visibility and information-sharing controls for community plans.',
+          'Privacy & security',
+          'Privacy and security options will be available in a future release.',
         ),
       ])
         Card(

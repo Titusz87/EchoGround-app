@@ -45,13 +45,9 @@ class _PlanPreviewState extends State<_PlanPreview> {
     PlanSection('Privacy & security', 'Choose what you share.', Icons.privacy_tip_outlined, content: PrivacySecurityOptions()),
   ];
   static const communitySections = [
-    PlanSection('Notification page', 'Community notices and updates for linked households.', Icons.notifications_outlined),
-    PlanSection('Household plan completion', 'View household preparedness completion where sharing is authorised.', Icons.fact_check_outlined),
-    PlanSection('Residents’ roll call', 'An incident roll based on the default resident list.', Icons.groups_outlined),
-    PlanSection('Community setup', 'Community details and planning arrangements.', Icons.settings_outlined),
-    PlanSection('Building preparedness', 'Checklists for the outside of community buildings.', Icons.business_outlined),
-    PlanSection('Incident guests', 'Guest registration and incident attendance.', Icons.person_add_outlined),
-    PlanSection('Sharing & privacy', 'Community plan visibility and information-sharing controls.', Icons.privacy_tip_outlined),
+    PlanSection('Notifications', 'Community notices and updates for linked households.', Icons.notifications_outlined),
+    PlanSection('Household preparedness plan', 'Household preparedness summaries and completion status.', Icons.fact_check_outlined),
+    PlanSection('Privacy & security', 'Privacy and security options will be available in a future release.', Icons.privacy_tip_outlined),
   ];
 
   @override

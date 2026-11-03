@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../map_screen.dart';
+import '../login_page.dart';
+import '../../widgets/report_dialog.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/dark_plan_layout.dart';
 
@@ -12,13 +13,9 @@ class LeaderDashboard extends StatefulWidget {
 class _LeaderDashboardState extends State<LeaderDashboard> {
   int? _sideIndex;
   static const _sections = [
-    PlanSection('Notification page', 'Community notices and updates for linked households.', Icons.notifications_outlined),
-    PlanSection('Household plan completion', 'View household preparedness completion where sharing is authorised.', Icons.fact_check_outlined),
-    PlanSection('Residents’ roll call', 'An incident roll based on the default resident list.', Icons.groups_outlined),
-    PlanSection('Community setup', 'Community details and planning arrangements.', Icons.settings_outlined),
-    PlanSection('Building preparedness', 'Checklists for the outside of community buildings.', Icons.business_outlined),
-    PlanSection('Incident guests', 'Guest registration and incident attendance.', Icons.person_add_outlined),
-    PlanSection('Sharing & privacy', 'Community plan visibility and information-sharing controls.', Icons.privacy_tip_outlined),
+    PlanSection('Notifications', 'Community notices and updates for linked households.', Icons.notifications_outlined),
+    PlanSection('Household preparedness plan', 'Household preparedness summaries and completion status.', Icons.fact_check_outlined),
+    PlanSection('Privacy & security', 'Privacy and security options will be available in a future release.', Icons.privacy_tip_outlined),
   ];
 
   @override
@@ -33,16 +30,35 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     bottomNavigationBar: NavigationBar(
       selectedIndex: 0,
       onDestinationSelected: (index) {
-        if (index == 0) setState(() => _sideIndex = null);
-        if (index == 1) {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const MapScreen()));
+        if (index == 0) {
+          setState(() => _sideIndex = null);
+        } else if (index == 1) {
+          showReportDialog(context);
+        } else if (index == 2) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+          );
         }
       },
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.warning), label: 'Incidents'),
-        NavigationDestination(icon: Icon(Icons.map), label: 'Map'),
-        NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
-      ],
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.crisis_alert_outlined),
+              selectedIcon: Icon(Icons.crisis_alert),
+              label: 'Incidents',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.report_outlined, color: Colors.redAccent, size: 34),
+              selectedIcon: Icon(Icons.report, color: Colors.redAccent, size: 34),
+              label: 'Report',
+            ),
+            // FIXED: Replaced "Contacts" layout destination item properties with "Profile"
+            NavigationDestination(
+              icon: Icon(Icons.account_circle_outlined),
+              selectedIcon: Icon(Icons.account_circle),
+              label: 'Profile',
+            ),
+          ],
     ),
   );
 }
