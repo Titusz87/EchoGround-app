@@ -5,6 +5,7 @@ from firebase_admin import credentials, messaging, app_check
 from fastapi import Header, HTTPException
 from firebase_admin.exceptions import FirebaseError
 import jwt
+import app.services.system_settings as system_settings
 
 
 # only initialise firebase once for push notifications
@@ -55,18 +56,27 @@ def firebase_test_notification():
 
 
 # use try catch when calling this fn in case it fails
-def send_firebase_notification(_title, _body, _token, _data):
-    message = messaging.Message(
-        notification=messaging.Notification(
-            title=_title,
-            body=_body
-        ),
-        data=_data,
-        token=_token
-    )
-    response = messaging.send(message)
-    return response
+def send_firebase_notification(_title, _body, _token, _data = None):
+    try:
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=_title,
+                body=_body
+            ),
+            data=_data,
+            token=_token
+        )
+        response = messaging.send(message)
+        if system_settings.get("print_firebase_notification_sent"):
+            print("Pushed firebase notification")
+        return True
+    except Exception as e:
+        if system_settings.get("print_firebase_notification_sent"):
+            print(f"Failed to send firebase notification to token: '{_token}'. {e}")
+        return False
 
+def row_to_firebase_data(row):
+    return {column.name: str(getattr(row, column.name) or "") for column in row.__table__.columns}
 
 # verify firebase app check tokens to be authentic. so the user can't register with a fake fcm token
 def verify_app_check(

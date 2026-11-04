@@ -159,7 +159,7 @@ def send_emergency_report_to_db(data: EmergencyReportRegistrationRequest):
             "message" : f"Submitted emergency report '{data.title}' to community: {community_leader.community_name}"
         }
 
-        #TODO: this could be a push notification to the community leader
+        #NOTE: this could be a push notification to the community leader
 
 
 

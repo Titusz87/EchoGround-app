@@ -7,6 +7,7 @@ from app.services.create_records import create_community_leader, create_communit
 from app.routers.household import LoginRequest
 from app.services.login import login
 from app.services import db_helpers as db
+from app.services import firebase
 
 #-----------------------------------------
 
@@ -163,12 +164,33 @@ def create_community_specific_plans(data: CommunityLeaderPlanCreationRequest):
             "message": f"created community plans for {community_leader.community_name}"
             }
 
-#TODO: this
-
 class CommunityLeaderPublishNotificationRequest(BaseModel):
     id: int
     body: str
 
 @router.post("/community-leader/publish-notification")
 def send_a_notification_to_all_community_members(data: CommunityLeaderPublishNotificationRequest):
-    pass
+    with get_session() as session:
+
+        #verify id exists
+        verification = verify_person_creds(data.id)
+        if verification is not True:
+            raise HTTPException(status_code=401, detail= verification)
+
+        #check community leader exists
+        community_leader = session.get(models.Community_Leader, data.id)
+        if community_leader is None:
+            raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
+    
+        #now that we know everything is ok, we can send a firebase message to everyone in the community
+        #retrieve all the fcm tokens
+        person_rows = db.get_rows_from_ids(session, models.People, community_leader.community_members)
+        sent_count = 0
+        for person in person_rows:
+            success = firebase.send_firebase_notification(f"New community notification from {community_leader.first_name}", data.body, person.fcm_token)
+            if success:
+                sent_count += 1
+        return {
+            "status": "ok",
+            "message": f"Sent {sent_count} notifications to community members in '{community_leader.community_name}'"
+            }

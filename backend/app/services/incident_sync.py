@@ -6,7 +6,7 @@ import app.services.db_helpers as db
 from app.services.quadtree import Quadtree
 import numpy as np
 from sklearn.neighbors import BallTree
-from app.services.firebase import send_firebase_notification
+from app.services.firebase import send_firebase_notification, row_to_firebase_data
 import app.services.system_settings as system_settings
 import random
 
@@ -18,7 +18,6 @@ quadtree = None
 verbose_debug = False
 custom_quadtree = False
 notification_fields  = ["status", "warning_level", "latitude", "longitude", "description", "address"] #people get updated when these fields change
-print_user_notifications = True 
 
 #-------------------------------info-----------------------------------------
 
@@ -125,8 +124,7 @@ def update_database_incidents(incidents, fake_incidents = False):
             notify_users(session, push_data_new_incidents)       
         
         
-        
-
+    
         #--------------------Search nearby_incident_data to send users updates-------------------------------- 
 
         #at the moment this only updates the user if the 'notification_fields' have been changed
@@ -151,8 +149,6 @@ def update_database_incidents(incidents, fake_incidents = False):
             
             
 
-
-        
         #------------------Cleanup: flush temporary_incidents and delete archived incidents from current_incidents-----
         
         #can delete the rows in current_incidents that were archived now
@@ -327,21 +323,16 @@ def notify_user(session, person_id, incident_ids, from_rows):
     #now extract only the rows we need and send messages
     message_rows = [row for row in from_rows if row.id in incident_ids]
     sent_messages = 0
-    global print_user_notifications
     for row in message_rows:
         try:
             data = row_to_firebase_data(row)
             message = create_message_from_incident(row)
             send_firebase_notification("New Incident Update", message, fcm_token, data)
-            if print_user_notifications:
-                print(f"Notification to user: {message}")
             sent_messages += 1 
         except Exception as e:
             print(f"Failed to send notification: {e}")
     return sent_messages
 
-def row_to_firebase_data(row):
-    return {column.name: str(getattr(row, column.name) or "") for column in row.__table__.columns}
 
 def create_message_from_incident(row):
     message = f"There is a {row.event_type} near you with status '{row.status}' and warning level '{row.warning_level}. "
