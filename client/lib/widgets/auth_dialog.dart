@@ -27,7 +27,6 @@ void showLoginDialog(
   String? selectedCommunity; // Currently chosen dropdown option
 
   /// Fetches the list of community names from the backend.
-  /// Returns an empty list on failure so the dropdown still renders.
   Future<List<String>> fetchCommunityNames() async {
     try {
       final String backendUrl =
@@ -39,8 +38,6 @@ void showLoginDialog(
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
 
-        // The backend returns an object, not a plain list, so unwrap it.
-        // Tries common key names, then falls back to the first list value.
         dynamic raw = decoded;
         if (decoded is Map) {
           raw =
@@ -54,7 +51,6 @@ void showLoginDialog(
         if (raw is List) {
           return raw
               .map((item) {
-                // Items may be plain strings or objects like {"name": "..."}
                 if (item is Map) {
                   return (item['community_name'] ?? item['name'] ?? '')
                       .toString();
@@ -64,8 +60,6 @@ void showLoginDialog(
               .where((name) => name.isNotEmpty)
               .toList();
         }
-
-        // Shows the real shape in the console if none of the above matched
         print('Unexpected community response shape: ${response.body}');
       } else {
         print('Community names request failed: ${response.statusCode}');
@@ -83,10 +77,8 @@ void showLoginDialog(
     context: context,
     barrierColor: const Color.fromRGBO(0, 0, 0, 0.4),
     builder: (BuildContext context) {
-      // Blurs the page behind the dialog
       return BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
-        // StatefulBuilder lets the dialog rebuild itself with setState
         child: StatefulBuilder(
           builder: (context, setState) {
             return Dialog(
@@ -100,10 +92,8 @@ void showLoginDialog(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Title changes with the mode and user type
                       Text(
-                        '${isLogin ? 'Login' : 'Sign Up'} as '
-                        '${isLeader ? 'Leader' : 'Household'}',
+                        '${isLogin ? 'Login' : 'Sign Up'} as ${isLeader ? 'Leader' : 'Household'}',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -112,7 +102,6 @@ void showLoginDialog(
                       ),
                       const SizedBox(height: 16),
 
-                      // Error / info banner (only shown when there is a message)
                       if (errorMessage != null) ...[
                         Container(
                           width: double.infinity,
@@ -149,9 +138,8 @@ void showLoginDialog(
                         const SizedBox(height: 16),
                       ],
 
-                      // Sign-up only fields
+                      // Sign-up fields
                       if (!isLogin) ...[
-                        // Leaders enter a first name, households a last name
                         TextField(
                           controller: nameController,
                           style: const TextStyle(color: Colors.white),
@@ -173,7 +161,6 @@ void showLoginDialog(
                         ),
                         const SizedBox(height: 12),
 
-                        // Household member count (households only)
                         if (!isLeader) ...[
                           TextField(
                             controller: countController,
@@ -186,61 +173,65 @@ void showLoginDialog(
                             ),
                           ),
                           const SizedBox(height: 12),
-                        ],
 
-                        // Community dropdown, populated from the backend
-                        FutureBuilder<List<String>>(
-                          future: communitiesFuture,
-                          builder: (context, snapshot) {
-                            final List<String> communities =
-                                snapshot.data ?? [];
+                          // 🛠️ CASE A: HOUSEHOLD SEEKS AN EXISTING COMMUNITY FROM DROPDOWN
+                          FutureBuilder<List<String>>(
+                            future: communitiesFuture,
+                            builder: (context, snapshot) {
+                              final List<String> communities =
+                                  snapshot.data ?? [];
 
-                            return DropdownButtonFormField<String>(
-                              // Only pass a value that exists in the list,
-                              // otherwise Flutter throws an assertion error
-                              value: communities.contains(selectedCommunity)
-                                  ? selectedCommunity
-                                  : null,
-                              dropdownColor: const Color(0xFF14171A),
-                              style: const TextStyle(color: Colors.white),
-                              decoration: const InputDecoration(
-                                labelText: 'Select Community',
-                                labelStyle: TextStyle(color: Colors.white60),
-                                border: OutlineInputBorder(),
-                              ),
-                              hint: Text(
-                                snapshot.connectionState ==
-                                        ConnectionState.waiting
-                                    ? 'Loading community names...'
-                                    : 'Choose a community',
-                                style: const TextStyle(
-                                  color: Colors.white30,
-                                  fontSize: 14,
+                              return DropdownButtonFormField<String>(
+                                value: communities.contains(selectedCommunity)
+                                    ? selectedCommunity
+                                    : null,
+                                dropdownColor: const Color(0xFF14171A),
+                                style: const TextStyle(color: Colors.white),
+                                decoration: const InputDecoration(
+                                  labelText: 'Select Community',
+                                  labelStyle: TextStyle(color: Colors.white60),
+                                  border: OutlineInputBorder(),
                                 ),
-                              ),
-                              items: communities
-                                  .map(
-                                    (String name) => DropdownMenuItem<String>(
-                                      value: name,
-                                      child: Text(name),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (newValue) {
-                                setState(() {
-                                  selectedCommunity = newValue;
-                                  // Feeds the selection to the text controller,
-                                  // which is read when registering
-                                  communityController.text = newValue ?? '';
-                                });
-                              },
-                            );
-                          },
-                        ),
+                                hint: Text(
+                                  snapshot.connectionState ==
+                                          ConnectionState.waiting
+                                      ? 'Loading community names...'
+                                      : 'Choose a community',
+                                  style: const TextStyle(
+                                    color: Colors.white30,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                items: communities.map((String name) {
+                                  return DropdownMenuItem<String>(
+                                    value: name,
+                                    child: Text(name),
+                                  );
+                                }).toList(),
+                                onChanged: (newValue) {
+                                  setState(() {
+                                    selectedCommunity = newValue;
+                                    communityController.text = newValue ?? '';
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                        ] else ...[
+                          // 🛠️ CASE B: LEADER CREATES/TYPES A BRAND NEW COMMUNITY NAME
+                          TextField(
+                            controller: communityController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: const InputDecoration(
+                              labelText: 'Create New Community Name',
+                              labelStyle: TextStyle(color: Colors.white60),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                       ],
 
-                      // Password (shown in both login and sign-up modes)
                       TextField(
                         controller: passwordController,
                         obscureText: true,
@@ -252,8 +243,6 @@ void showLoginDialog(
                         ),
                       ),
                       const SizedBox(height: 20),
-
-                      // Submit button: handles both login and registration
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -268,22 +257,16 @@ void showLoginDialog(
                           ),
                           onPressed: () async {
                             setState(() => errorMessage = null);
-
-                            // Both flows need the backend person ID for this
-                            // device, so resolve it first
                             final int? parsedId =
                                 await AuthService.ensureBackendPersonId(
                                   context,
                                 );
                             if (parsedId == null) {
                               setState(
-                                () => errorMessage =
-                                    'Could not resolve device connectivity. '
-                                    'Please try again.',
+                                () => errorMessage = 'Could not resolve device connectivity. Please try again.',
                               );
                               return;
                             }
-
                             if (passwordController.text.trim().isEmpty) {
                               setState(
                                 () => errorMessage =
@@ -291,22 +274,20 @@ void showLoginDialog(
                               );
                               return;
                             }
-
                             bool success = false;
                             if (isLogin) {
-                              // Login: authenticate with ID + password
                               success = await AuthService.login(
                                 id: parsedId,
                                 password: passwordController.text.trim(),
                                 isLeader: isLeader,
                               );
                             } else {
-                              // Register: a community must be selected
                               if (communityController.text.trim().isEmpty) {
-                                setState(
-                                  () => errorMessage =
-                                      'Please select a valid community item.',
-                                );
+                                setState(() {
+                                  errorMessage = isLeader
+                                      ? 'Please specify a name for your new community.'
+                                      : 'Please select a valid community from the dropdown list.';
+                                });
                                 return;
                               }
                               success = await AuthService.register(
@@ -321,10 +302,6 @@ void showLoginDialog(
                                 isLeader: isLeader,
                               );
                             }
-
-                            // The dialog may have been closed while awaiting
-                            if (!context.mounted) return;
-
                             if (success) {
                               Navigator.of(context).pop();
                               onAuthSuccess();
@@ -342,8 +319,6 @@ void showLoginDialog(
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // Switches between login and sign-up modes
                       TextButton(
                         onPressed: () {
                           setState(() {
@@ -354,7 +329,7 @@ void showLoginDialog(
                         child: Text(
                           isLogin
                               ? "Don't have an account? Sign Up"
-                              : 'Already have an account? Login',
+                              : "Already have an account? Login",
                           style: const TextStyle(color: Color(0xFF4DB6AC)),
                         ),
                       ),
