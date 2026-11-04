@@ -26,12 +26,14 @@ void showLoginDialog(
   String? errorMessage;
   String? selectedCommunity; // Currently chosen dropdown option
 
-  /// Fetches the list of community names from the backend.
+  /// Fetches the list of community names from the backend environment.
   Future<List<String>> fetchCommunityNames() async {
     try {
-      final String backendUrl =
-          await DatabaseHelper.instance.getConfig('BACKEND_URL') ??
-          'http://127.0.0.1:8000';
+      // FIXED: Reads your deployment environment variables directly instead of looking inside an empty database table
+      const String backendUrl = String.fromEnvironment(
+        'BACKEND_URL',
+        defaultValue: 'http://127.0.0.1:8000',
+      );
       final url = Uri.parse('$backendUrl/household/get-community-names');
 
       final response = await http.get(url);
