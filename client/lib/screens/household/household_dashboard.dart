@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 //import '../../widgets/household/household_header.dart';
 import '../../widgets/dynamic_dashboard_header.dart';
 import '../../widgets/active_incidents_card.dart';
+import '../../widgets/household/household_checklist.dart';
 import '../login_page.dart';
 import '../../widgets/report_dialog.dart';
 
@@ -154,7 +155,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                   child: Builder(
                     builder: (context) {
                       if (_sideIndex == 0) {
-                        return _buildEmptyPlaceholderCard('Checklist Content', Icons.checklist);
+                        return const HouseholdChecklist();
                       }
                       if (_sideIndex == 1) {
                         return _buildEmptyPlaceholderCard('Community Plan Details', Icons.groups);

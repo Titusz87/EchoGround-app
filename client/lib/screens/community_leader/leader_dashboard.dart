@@ -15,8 +15,8 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   int? _sideIndex;
   final _planDraft = CommunityPlanDraft();
   List<PlanSection> get _sections => [
-    PlanSection('Community plan', 'Community evacuation arrangements.', Icons.description_outlined, content: CommunityPlanEditor(draft: _planDraft)),
     PlanSection('Notifications', 'Community notices and updates for linked households.', Icons.notifications_outlined),
+    PlanSection('Community plan', 'Community evacuation arrangements.', Icons.description_outlined, content: CommunityPlanEditor(draft: _planDraft)),
     PlanSection('Household preparedness plan', 'Household preparedness summaries and completion status.', Icons.fact_check_outlined),
     PlanSection('Privacy & security', 'Privacy and security options will be available in a future release.', Icons.privacy_tip_outlined),
   ];
