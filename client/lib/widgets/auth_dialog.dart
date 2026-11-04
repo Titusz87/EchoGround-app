@@ -182,7 +182,8 @@ void showLoginDialog(
                                   snapshot.data ?? [];
 
                               return DropdownButtonFormField<String>(
-                                value: communities.contains(selectedCommunity)
+                                initialValue:
+                                    communities.contains(selectedCommunity)
                                     ? selectedCommunity
                                     : null,
                                 dropdownColor: const Color(0xFF14171A),

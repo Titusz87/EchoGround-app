@@ -157,71 +157,92 @@ class AuthService {
     return null;
   }
 
-  /// Handles Registration Requests for both Roles dynamically and permanently stores account metadata locally on creation
+  /// Handles Registration Requests dynamically.
+  /// For households, it executes Evan's sequential two-step creation and linkage protocol.
   static Future<bool> register({
     required int id,
     required String password,
     required String phone,
-    required String secondaryName, // Represents last_name for household, or first_name for leader
-    required String communityName, // Exclusive parameter used by leaders
+    required String secondaryName,
+    required String communityName,
     required int count,
     required bool isLeader,
   }) async {
-    final String subPath = isLeader
-        ? 'community-leader/create'
-        : 'household/create';
-    final url = Uri.parse('$_backendBaseUrl/$subPath');
-
-    // Dynamically build the exact payload body expected by swagger models
-    final Map<String, dynamic> requestBody = isLeader
-        ? {
+    try {
+      if (isLeader) {
+        // --- COMMUNITY LEADER ACCOUNT ROUTE FLOW ---
+        final url = Uri.parse('$_backendBaseUrl/community-leader/create');
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
             'id': id,
             'first_name': secondaryName,
             'phone': phone,
             'password': password,
             'community_name': communityName,
-          }
-        : {
+          }),
+        );
+
+        print(
+          'Leader Create Status: ${response.statusCode} | Body: ${response.body}',
+        );
+        return response.statusCode == 200 || response.statusCode == 201;
+      } else {
+        // --- HOUSEHOLD ACCOUNT FLOW (TWO-STEP CHAIN) ---
+
+        // STEP 1: Create the base household profile entry row
+        final createUrl = Uri.parse('$_backendBaseUrl/household/create');
+        final createResponse = await http.post(
+          createUrl,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
             'id': id,
             'last_name': secondaryName,
             'phone': phone,
             'count': count,
-            'community_name': communityName,
             'password': password,
-          };
+          }),
+        );
 
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(requestBody),
-      );
+        print(
+          'Step 1 (Household Create) Status: ${createResponse.statusCode} | Body: ${createResponse.body}',
+        );
 
-      print(
-        'Auth Register Status: ${response.statusCode} | Body: ${response.body}',
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-
-        if (responseData['status'] == 'failure' ||
-            responseData['status'] == 'error') {
+        if (createResponse.statusCode != 200 &&
+            createResponse.statusCode != 201) {
+          print('Step 1 Failed: Profile creation rejected.');
           return false;
         }
 
-        // PERSIST NEW ACCOUNT CONTEXT DETAILS STRAIGHT TO SQLITE DEVICE CONFIG TABLE
-        if (!isLeader) {
+        final Map<String, dynamic> createData = jsonDecode(createResponse.body);
+        if (createData['status'] == 'failure' ||
+            createData['status'] == 'error') {
+          return false;
+        }
+
+        // STEP 2: Immediately execute a PATCH operation to attach this profile to a community
+        final registerUrl = Uri.parse('$_backendBaseUrl/household/register');
+        final registerResponse = await http.patch(
+          registerUrl,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'id': id, 'community_name': communityName}),
+        );
+
+        print(
+          'Step 2 (Household Community Link) Status: ${registerResponse.statusCode} | Body: ${registerResponse.body}',
+        );
+
+        if (registerResponse.statusCode == 200 ||
+            registerResponse.statusCode == 201) {
+          // --- PERSIST DYNAMIC METADATA LOCALLY TO SQLITE ON SUCCESS ---
           String savedLastName = secondaryName;
-          final String message = responseData['message']?.toString() ?? '';
+          final String message = createData['message']?.toString() ?? '';
 
           if (message.contains('last name ')) {
-            savedLastName = message
-                .split('last name ')
-                .last
-                .trim(); // Pulls the true server last name string
+            savedLastName = message.split('last name ').last.trim();
           }
 
-          // Use the exact integer payload argument provided by the live text input field controller
           await DatabaseHelper.instance.saveConfig(
             'household_last_name',
             savedLastName,
@@ -231,18 +252,19 @@ class AuthService {
             count.toString(),
           );
           print(
-            'LOCAL STORAGE SYNCED ON CREATION: Saved Last Name ($savedLastName) and count ($count) permanently to SQLite.',
+            'LOCAL SQLITE STORAGE LOCKED: Account created and linked to ($communityName) successfully.',
           );
 
-          // BROADCAST TRIGGER LAYER: Alert dynamic header that raw DB fields have populated
+          // Broadcast database sync event instantly to let your dynamic header update live
           DatabaseHelper.instance.syncNotifier.value++;
+          return true;
         }
 
-        return true;
+        print('Step 2 Failed: Community relationship assignment rejected.');
+        return false;
       }
-      return false;
     } catch (e) {
-      print('Registration networking thread failed: $e');
+      print('Registration pipeline processing thread failure: $e');
       return false;
     }
   }
