@@ -5,7 +5,6 @@ import '../../widgets/active_incidents_card.dart';
 import '../../widgets/report_dialog.dart';
 import '../login_page.dart';
 import 'components/marquee_banner.dart';
-import 'components/household_side_pill.dart';
 
 class HouseholdDashboard extends StatefulWidget {
   const HouseholdDashboard({super.key});
@@ -15,14 +14,15 @@ class HouseholdDashboard extends StatefulWidget {
 }
 
 class _HouseholdDashboardState extends State<HouseholdDashboard> {
-  int? _sideIndex;
+  int _bottomIndex =
+      0; // Standard bottom navigation item controller index tracking
   final String _announcementText =
       'No active announcements at the moment. Check back later for critical community updates.';
 
   Future<Map<String, String>> _loadProfile() async {
     final lastName =
         await DatabaseHelper.instance.getConfig('household_last_name') ??
-        'Unknown';
+        'Unknown Household';
     return {'last_name': lastName};
   }
 
@@ -38,48 +38,36 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
       body: FutureBuilder<Map<String, String>>(
         future: _loadProfile(),
         builder: (context, snapshot) {
-          final lastName = snapshot.data?['last_name'] ?? 'Tarcsai';
+          final lastName = snapshot.data?['last_name'] ?? 'Unknown Household';
 
-          return Stack(
-            children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Centered Profile Name Header Block
-                    Text(
-                      'Household $lastName',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Full-Width Interactive Marquee Ticker
-                    _buildTickerTape(),
-                    const SizedBox(height: 24),
-
-                    // Main Grid Content (Offsets 48px to the right to leave space for sidebar)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 48.0),
-                      child: _buildMainViewContent(),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+          return SingleChildScrollView(
+            // FIXED: Removed the left sidebar padding constraint completely!
+            // All content rows now scale to full screen layout width safely.
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Profile Text Header Block
+                Text(
+                  'Household $lastName',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: HouseholdSidePill(
-                  sideIndex: _sideIndex,
-                  onChanged: (idx) => setState(() => _sideIndex = idx),
-                ),
-              ),
-            ],
+                const SizedBox(height: 24),
+
+                // Full-Width Interactive Marquee Ticker
+                _buildTickerTape(),
+                const SizedBox(height: 24),
+
+                // Active Target Screen Component Display Frame
+                _buildMainViewContent(),
+                const SizedBox(height: 24),
+              ],
+            ),
           );
         },
       ),
@@ -113,11 +101,16 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
   }
 
   Widget _buildMainViewContent() {
-    if (_sideIndex == 0)
-      return _buildPlaceholderCard('Checklist Content', Icons.checklist);
-    if (_sideIndex == 1)
-      return _buildPlaceholderCard('Community Plan Details', Icons.groups);
+    // Switch state layout frames based on your bottom navigation choices
+    if (_bottomIndex == 1)
+      return _buildPlaceholderCard('Checklist Content Log', Icons.checklist);
+    if (_bottomIndex == 2)
+      return _buildPlaceholderCard(
+        'Community Action Plan Matrix',
+        Icons.groups,
+      );
 
+    // Default Index (0) -> Main Feed Overview Card Stack
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -129,7 +122,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
         ),
         const SizedBox(height: 16),
         _buildPlaceholderCard(
-          'Community Reports',
+          'Community Reports Feed',
           Icons.assignment_turned_in_outlined,
         ),
       ],
@@ -177,41 +170,49 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
   }
 
   Widget _buildBottomNav() {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        navigationBarTheme: _sideIndex != null
-            ? const NavigationBarThemeData(indicatorColor: Colors.transparent)
-            : Theme.of(context).navigationBarTheme,
-      ),
-      child: NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (idx) {
-          if (idx == 0) setState(() => _sideIndex = null);
-          if (idx == 1) showReportDialog(context);
-          if (idx == 2)
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const LoginPage()),
-            );
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.report_outlined, color: Colors.redAccent),
-            selectedIcon: Icon(Icons.report, color: Colors.redAccent),
-            label: 'Report',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_circle_outlined),
-            selectedIcon: Icon(Icons.account_circle),
-            label: 'Profile',
-          ),
-        ],
-      ),
+    return NavigationBar(
+      selectedIndex: _bottomIndex,
+      onDestinationSelected: (idx) {
+        if (idx == 3) {
+          // Trigger the 3-page structural report dialog modal overlay pattern
+          showReportDialog(context);
+        } else if (idx == 4) {
+          // Route direct page navigation context straight over the account profile portal
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+          );
+        } else {
+          setState(() => _bottomIndex = idx);
+        }
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Home',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.checklist_outlined),
+          selectedIcon: Icon(Icons.checklist),
+          label: 'Checklist',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.groups_outlined),
+          selectedIcon: Icon(Icons.groups),
+          label: 'Plan',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.report_outlined, color: Colors.redAccent),
+          selectedIcon: Icon(Icons.report, color: Colors.redAccent),
+          label: 'Report',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.account_circle_outlined),
+          selectedIcon: Icon(Icons.account_circle),
+          label: 'Profile',
+        ),
+      ],
     );
   }
 
