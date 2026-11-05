@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/database_helper.dart';
@@ -11,19 +12,40 @@ class HouseholdChecklist extends StatefulWidget {
 }
 
 class _HouseholdChecklistState extends State<HouseholdChecklist> {
-  int step = 0;
+  int step = -1;
+  final checklistTop = GlobalKey();
+  final Map<String, int> taskPages = {};
+  Timer? autosaveTimer;
+  bool closing = false;
+  int editVersion = 0;
+  final Map<String, GlobalKey> taskKeys = {};
+  bool dirty = false;
+  String? saveError;
+
+  void changed(VoidCallback update) {
+    setState(() { update(); editVersion++; dirty = true; saveError = null; });
+    autosaveTimer?.cancel();
+    autosaveTimer = Timer(const Duration(milliseconds: 700), () => save(quiet: true));
+  }
+
+  bool sectionDone(int index) {
+    bool done(Map<String, String> items) => items.keys.every((id) => answers[id] == 'done' || answers[id] == 'na');
+    switch (index) {
+      case 0: return setupComplete;
+      case 1: return done(supplies) && activeMedicines.every((m) => ['done', 'na'].contains(answers['medication.${m['id']}'])) && (fields['pets'] != 'yes' || done(petTasks));
+      case 2: return transportComplete && ['destination', 'alternative'].every((id) => (fields[id] ?? '').trim().isNotEmpty && fields['$id.confirmed'] == 'yes') && ['meeting', 'contacts'].every((id) => (fields[id] ?? '').trim().isNotEmpty) && done(arrangements);
+      case 3: return done(dwelling) && dwelling.keys.where((id) => answers[id] != 'na').every((id) => members.any((m) => m['id'] == fields['assigned.$id']));
+      default: return complete;
+    }
+  }
   void goToStep(int next) {
     // Release the old field so keyboard focus cannot scroll the new step down.
     FocusScope.of(context).unfocus();
     setState(() => step = next);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // The dashboard owns the SingleChildScrollView. Reset that actual
-      // scroll position after the new step has been laid out.
-      final scrollable = Scrollable.maybeOf(context);
-      if (scrollable != null && scrollable.position.hasContentDimensions) {
-        scrollable.position.jumpTo(scrollable.position.minScrollExtent);
-      }
+      final target = checklistTop.currentContext;
+      if (target != null) Scrollable.ensureVisible(target, alignment: 0, duration: Duration.zero);
     });
   }
   int? owner;
@@ -36,9 +58,6 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
   Map<String, String> answers = {};
   List<String> vehicles = [];
   List<Map<String, String>> medications = [];
-  final Map<String, TextEditingController> medicationInputs = {};
-  bool showMemberErrors = false;
-
   Iterable<Map<String, String>> medicinesFor(String memberId) => medications.where((m) => m['member_id'] == memberId);
   Iterable<Map<String, String>> get activeMedicines => medications.where((m) => members.any((person) => person['id'] == m['member_id'] && person['medication'] == 'yes'));
   bool get membersValid => members.every((m) =>
@@ -47,44 +66,34 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
 
   @override
   void dispose() {
-    for (final controller in medicationInputs.values) { controller.dispose(); }
+    closing = true;
+    autosaveTimer?.cancel();
+    if (dirty && !saving) unawaited(save(quiet: true, background: true));
     super.dispose();
   }
 
-  void addMedication(Map<String, String> member) {
-    final controller = medicationInputs.putIfAbsent(member['id']!, () => TextEditingController());
-    final name = controller.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a medication name first.')));
-      return;
-    }
-    if (medicinesFor(member['id']!).any((m) => m['name']!.toLowerCase() == name.toLowerCase())) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This medication is already listed for this member.')));
-      return;
-    }
-    setState(() {
-      medications.add({'id': 'medicine.${DateTime.now().microsecondsSinceEpoch}.${medications.length}', 'member_id': member['id']!, 'name': name});
-      controller.clear();
+  Future<void> editMember([Map<String, String>? existing]) async {
+    final id = existing?['id'] ?? 'member.${DateTime.now().microsecondsSinceEpoch}.${members.length}';
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context, barrierDismissible: false,
+      builder: (_) => _HouseholdMemberDialog(
+        member: existing ?? {'id': id, 'name': '', 'phone': '', 'medication': 'unknown'},
+        medicines: medicinesFor(id).map((m) => Map<String, String>.from(m)).toList(),
+      ),
+    );
+    if (!mounted || result == null) return;
+    changed(() {
+      final person = Map<String, String>.from(result['member'] as Map);
+      final newMedicines = (result['medicines'] as List).map((m) => Map<String, String>.from(m as Map)).toList();
+      final removed = medicinesFor(id).where((m) => !newMedicines.any((n) => n['id'] == m['id'])).map((m) => 'medication.${m['id']}').toSet();
+      answers.removeWhere((key, value) => removed.contains(key));
+      medications.removeWhere((m) => m['member_id'] == id);
+      medications.addAll(newMedicines);
+      if (existing == null) { members.add(person); }
+      else { members[members.indexWhere((m) => m['id'] == id)] = person; }
     });
+    await save(quiet: true);
   }
-
-  Widget memberMedications(Map<String, String> member) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    const SizedBox(height: 12),
-    TextField(
-      controller: medicationInputs.putIfAbsent(member['id']!, () => TextEditingController()),
-      enabled: !saving,
-      decoration: InputDecoration(labelText: 'Medication name', border: const OutlineInputBorder(),
-        errorText: showMemberErrors && medicinesFor(member['id']!).isEmpty ? 'Add at least one medication' : null),
-      onSubmitted: saving ? null : (_) => addMedication(member),
-    ),
-    const SizedBox(height: 8),
-    OutlinedButton.icon(onPressed: saving ? null : () => addMedication(member), icon: const Icon(Icons.add), label: const Text('Add medication')),
-    for (final medicine in medicinesFor(member['id']!))
-      Row(children: [
-        Expanded(child: Text(medicine['name']!)),
-        IconButton(tooltip: 'Remove medication', onPressed: saving ? null : () => setState(() { medications.remove(medicine); answers.remove('medication.${medicine['id']}'); }), icon: const Icon(Icons.remove_circle_outline)),
-      ]),
-  ]);
 
   static const steps = ['Household', 'Supplies', 'Evacuation', 'Dwelling', 'Review'];
   static const supplies = {
@@ -123,9 +132,15 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
   int get completed => itemIds.where((id) => answers[id] == 'done').length;
   int get assistance => itemIds.where((id) => answers[id] == 'help').length;
   int get count => members.length;
+  int get registeredMemberCount => int.tryParse(fields['registration_count'] ?? '') ?? 0;
+  int get addedMemberCount => members.where((m) => (m['name'] ?? '').trim().isNotEmpty).length;
+  int get remainingMemberCount {
+    final remaining = registeredMemberCount - addedMemberCount;
+    return remaining > 0 ? remaining : 0;
+  }
   bool get setupComplete => (fields['family'] ?? '').trim().isNotEmpty &&
     (fields['community'] ?? '').trim().isNotEmpty && count > 0 &&
-    membersValid && ['yes', 'no'].contains(fields['pets']) && (fields['pets'] != 'yes' || ((int.tryParse(fields['pet_count'] ?? '') ?? 0) > 0 && (fields['pet_details'] ?? '').trim().isNotEmpty));
+    remainingMemberCount == 0 && membersValid && ['yes', 'no'].contains(fields['pets']) && (fields['pets'] != 'yes' || ((int.tryParse(fields['pet_count'] ?? '') ?? 0) > 0 && (fields['pet_details'] ?? '').trim().isNotEmpty));
   int get seatCount => vehicles.fold(0, (total, id) => total + (int.tryParse(fields['seats.$id'] ?? '') ?? 0));
   bool get duplicateDrivers {
     final drivers = vehicles.map((id) => fields['driver.$id']).where((id) => id != null && id != '' && id != 'other').toList();
@@ -176,18 +191,54 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
           members[i].putIfAbsent('medication', () => 'unknown');
         }
       }
+      // Fill gaps only. Never replace a household's existing checklist entries.
+      Map<String, dynamic> profile = {};
+      final profileRaw = await db.getConfig('household_profile.v1.$id');
+      if (profileRaw != null && profileRaw.isNotEmpty) {
+        try { profile = Map<String, dynamic>.from(jsonDecode(profileRaw) as Map); } catch (_) {}
+      }
+      // Legacy registration cached name/count on the registered device only.
+      if (await db.getConfig('backend_person_id') == id.toString()) {
+        profile.putIfAbsent('family', () => '');
+        if ((profile['family']?.toString() ?? '').trim().isEmpty) {
+          profile['family'] = await db.getConfig('household_last_name') ?? '';
+        }
+        profile.putIfAbsent('count', () => '');
+        if (int.tryParse(profile['count'].toString()) == null) {
+          profile['count'] = await db.getConfig('household_count') ?? '';
+        }
+      }
+      bool imported = false;
+      for (final key in ['family', 'community']) {
+        final value = profile[key]?.toString().trim() ?? '';
+        if ((fields[key] ?? '').trim().isEmpty && value.isNotEmpty && value != 'Unknown') {
+          fields[key] = value; imported = true;
+        }
+      }
+      final registeredCount = int.tryParse(profile['count']?.toString() ?? '') ?? 0;
+      if (registeredCount > 0 && fields['registration_count_imported'] != 'yes') {
+        fields['registration_count'] = registeredCount.toString();
+        // Keep the signup total as a target; add actual members through the form.
+        fields['registration_count_imported'] = 'yes';
+        imported = true;
+      }
+      if (await db.getConfig('auth_household_id') != id.toString()) throw StateError('Account changed');
       if (mounted) setState(() { owner = id; loading = false; error = null; });
+      if (imported && mounted) { dirty = true; editVersion++; await save(quiet: true); }
     } catch (_) {
       if (mounted) setState(() { loading = false; error = 'Sign in as a household to continue. If already signed in, the saved checklist could not be loaded.'; });
     }
   }
 
-  Future<void> save() async {
+  Future<void> save({bool quiet = false, bool background = false}) async {
     if (saving || owner == null) return;
-    setState(() => saving = true);
+    autosaveTimer?.cancel();
+    if (mounted && !background && !closing) { setState(() => saving = true); } else { saving = true; }
+    var savedVersion = editVersion;
     try {
       final db = DatabaseHelper.instance;
       if (await db.getConfig('auth_household_id') != owner.toString()) throw StateError('Account changed');
+      savedVersion = editVersion;
       final now = DateTime.now().toUtc().toIso8601String();
       final privatePlan = jsonEncode({
         'version': 1, 'fields': fields, 'members': members,
@@ -206,11 +257,17 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
         await txn.rawInsert('INSERT OR REPLACE INTO device_config (key, value) VALUES (?, ?)', ['household_checklist.v1.$owner', privatePlan]);
         await txn.rawInsert('INSERT OR REPLACE INTO device_config (key, value) VALUES (?, ?)', ['household_checklist.summary.v1.$owner', summary]);
       });
-      if (mounted) setState(() => savedAt = now);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Checklist saved privately on this device.')));
+      void saved() { savedAt = now; dirty = editVersion != savedVersion; saveError = null; }
+      if (mounted && !background && !closing) { setState(saved); } else { saved(); }
+      if (mounted && !closing && !quiet) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Checklist saved privately on this device.')));
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save. Your entries remain open; check your account and try again.')));
-    } finally { if (mounted) setState(() => saving = false); }
+      void failed() { saveError = 'Could not save on this device. Your entries remain open. Select Retry save.'; }
+      if (mounted && !background && !closing) { setState(failed); } else { failed(); }
+      if (mounted && !closing && !quiet) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(saveError!)));
+    } finally {
+      if (mounted && !background && !closing) { setState(() => saving = false); } else { saving = false; }
+      if (dirty && saveError == null) unawaited(save(quiet: true, background: closing || !mounted));
+    }
   }
 
   Widget field(String id, String label, {TextInputType? keyboard, int lines = 1, String? hint}) => Padding(
@@ -220,20 +277,29 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
       enabled: !saving, keyboardType: keyboard, minLines: lines, maxLines: lines,
       inputFormatters: keyboard == TextInputType.number ? [FilteringTextInputFormatter.digitsOnly] : null,
       decoration: InputDecoration(labelText: label, helperText: hint, helperMaxLines: 5, border: const OutlineInputBorder(), alignLabelWithHint: lines > 1),
-      onChanged: (value) => setState(() => fields[id] = value),
+      onChanged: (value) => changed(() => fields[id] = value),
     ),
   );
 
   Widget choice(String id, String label, Map<String, String> options) => Padding(
-    padding: const EdgeInsets.only(bottom: 14),
-    child: DropdownButtonFormField<String>(
-      key: ValueKey('choice.$id.${fields[id]}'),
-      value: options.containsKey(fields[id]) ? fields[id] : null,
-      isExpanded: true,
-      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-      items: options.entries.map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
-      onChanged: saving ? null : (value) => setState(() => fields[id] = value!),
-    ),
+    padding: const EdgeInsets.only(bottom: 20),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+      if (options.length <= 5)
+        Wrap(spacing: 8, runSpacing: 8, children: options.entries.map((entry) =>
+          fields[id] == entry.key
+            ? FilledButton(onPressed: saving ? null : () => changed(() => fields[id] = entry.key), child: Text(entry.value))
+            : OutlinedButton(onPressed: saving ? null : () => changed(() => fields[id] = entry.key), child: Text(entry.value)),
+        ).toList())
+      else DropdownButtonFormField<String>(
+        key: ValueKey('choice.$id.${fields[id]}'),
+        value: options.containsKey(fields[id]) ? fields[id] : null, isExpanded: true,
+        decoration: const InputDecoration(border: OutlineInputBorder()),
+        items: options.entries.map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+        onChanged: saving ? null : (value) => changed(() => fields[id] = value!),
+      ),
+    ]),
   );
 
   Widget memberChoice(String id, String label, {bool allowOther = false}) {
@@ -276,28 +342,47 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
     'reviewed': 'Recheck arrangements when people, transport, destinations or emergency conditions change.',
   };
 
-  Widget tasks(Map<String, String> items, {bool assign = false}) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: items.entries.map((item) => Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text(item.value, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 6),
-        if (explanations[item.key] != null) note(explanations[item.key]!),
-        if (assign) memberChoice('assigned.${item.key}', 'Who will complete this task'),
-        for (final status in statuses.entries)
-          Row(children: [
-            Radio<String>(value: status.key, groupValue: answers[item.key] ?? 'todo', onChanged: saving ? null : (value) => setState(() => answers[item.key] = value!)),
-            Expanded(child: Text(status.value)),
-          ]),
-        const Divider(color: Colors.white10),
+  Widget tasks(Map<String, String> items, {bool assign = false}) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    final entries = items.entries.toList();
+    final group = entries.map((e) => e.key).join('|');
+    final page = (taskPages[group] ?? 0).clamp(0, entries.length - 1).toInt();
+    final item = entries[page];
+    final anchor = taskKeys.putIfAbsent(group, () => GlobalKey());
+    void move(int next) {
+      FocusScope.of(context).unfocus();
+      setState(() => taskPages[group] = next);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final target = anchor.currentContext;
+        if (target != null) Scrollable.ensureVisible(target, alignment: 0, duration: Duration.zero);
+      });
+    }
+    return Padding(key: anchor, padding: const EdgeInsets.only(bottom: 20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('Item ${page + 1} of ${entries.length}', style: const TextStyle(color: Colors.white70)),
+      const SizedBox(height: 10),
+      Text(item.value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 10),
+      if (explanations[item.key] != null) note(explanations[item.key]!),
+      if (assign) memberChoice('assigned.${item.key}', 'Who will complete this task'),
+      for (final status in statuses.entries)
+        Padding(padding: const EdgeInsets.only(bottom: 8), child:
+          (answers[item.key] ?? 'todo') == status.key
+            ? FilledButton(onPressed: saving ? null : () => changed(() => answers[item.key] = status.key), child: Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text(status.value)))
+            : OutlinedButton(onPressed: saving ? null : () => changed(() => answers[item.key] = status.key), child: Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text(status.value))),
+        ),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        if (page > 0) TextButton(onPressed: saving ? null : () => move(page - 1), child: Text('Back: ${entries[page - 1].value}')),
+        if (page < entries.length - 1) TextButton(onPressed: saving ? null : () => move(page + 1), child: Text('Next: ${entries[page + 1].value}')),
       ]),
-    )).toList(),
-  );
+      const Divider(color: Colors.white10),
+    ]));
+  }
 
   void removeMember(int index) {
     final id = members[index]['id'];
-    setState(() {
+    changed(() {
       members.removeAt(index);
       final removed = medications.where((m) => m['member_id'] == id).map((m) => 'medication.${m['id']}').toSet();
       medications.removeWhere((m) => m['member_id'] == id);
@@ -307,40 +392,44 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
   }
 
   List<Widget> household() => [
+    const Text('Who is in your household?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+    const SizedBox(height: 8),
+    note('Add the people you are planning for.'),
     field('family', 'Family name'), field('community', 'Community name'),
-    for (var i = 0; i < members.length; i++) ...[
-      Text('Member ${i + 1}'), const SizedBox(height: 8),
-      TextFormField(key: ValueKey('name.${members[i]['id']}'), initialValue: members[i]['name'], enabled: !saving,
-        decoration: InputDecoration(labelText: 'Name (required)', border: const OutlineInputBorder(), errorText: showMemberErrors && (members[i]['name'] ?? '').trim().isEmpty ? 'Enter a name' : null),
-        onChanged: (v) => setState(() => members[i]['name'] = v)),
-      const SizedBox(height: 8),
-      TextFormField(key: ValueKey('phone.${members[i]['id']}'), initialValue: members[i]['phone'], enabled: !saving, keyboardType: TextInputType.phone,
-        decoration: const InputDecoration(labelText: 'Phone number (optional)', border: OutlineInputBorder()),
-        onChanged: (v) => members[i]['phone'] = v),
-      const SizedBox(height: 12),
-      DropdownButtonFormField<String>(
-        key: ValueKey('medication.${members[i]['id']}.${members[i]['medication']}'),
-        value: ['yes', 'no'].contains(members[i]['medication']) ? members[i]['medication'] : null, isExpanded: true,
-        decoration: InputDecoration(labelText: 'Currently taking medication? (required)', border: const OutlineInputBorder(), errorText: showMemberErrors && !['yes', 'no'].contains(members[i]['medication']) ? 'Choose Yes or No' : null),
-        items: const [DropdownMenuItem(value: 'yes', child: Text('Yes')), DropdownMenuItem(value: 'no', child: Text('No'))],
-        onChanged: saving ? null : (value) => setState(() => members[i]['medication'] = value!),
-      ),
-      if (members[i]['medication'] == 'yes') memberMedications(members[i]),
-      SizedBox(
-        height: 4,
-      ),
-      TextButton.icon(onPressed: saving ? null : () => removeMember(i), icon: const Icon(Icons.remove_circle_outline), label: const Text('Remove member')),
-      const SizedBox(height: 12),
-    ],
-    OutlinedButton.icon(onPressed: saving ? null : () => setState(() => members.add({'id': 'member.${DateTime.now().microsecondsSinceEpoch}.${members.length}', 'name': '', 'phone': '', 'medication': 'unknown'})), icon: const Icon(Icons.person_add_outlined), label: const Text('Add household member')),
-    const SizedBox(height: 12), Text('$count household member(s) added'),
+    const Text('Household members', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
     const SizedBox(height: 12),
-    choice('pets', 'Do you have pets?', const {'unknown': 'Not confirmed yet', 'yes': 'Yes', 'no': 'No'}),
+    for (var i = 0; i < members.length; i++)
+      Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text((members[i]['name'] ?? '').isEmpty ? 'Member ${i + 1} — add details' : members[i]['name']!, style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(members[i]['medication'] == 'yes' ? '${medicinesFor(members[i]['id']!).length} medication(s) recorded' : members[i]['medication'] == 'no' ? 'No medication' : 'Medication answer needed', style: const TextStyle(color: Colors.white70)),
+        Wrap(spacing: 8, children: [
+          TextButton(onPressed: saving ? null : () => editMember(members[i]), child: const Text('Edit member')),
+          TextButton(onPressed: saving ? null : () async {
+            final remove = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(
+              title: const Text('Remove household member?'), content: const Text('Their medication entries and task assignments will also be removed.'),
+              actions: [TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Remove'))],
+            ));
+            if (mounted && remove == true) removeMember(i);
+          }, child: const Text('Remove')),
+        ]),
+      ]))),
+    OutlinedButton.icon(onPressed: saving ? null : () => editMember(), icon: const Icon(Icons.person_add_outlined), label: const Text('Add household member')),
+    const SizedBox(height: 12),
+    if (registeredMemberCount > 0) ...[
+      Text('Household size: $registeredMemberCount'),
+      const SizedBox(height: 6),
+      Text('$addedMemberCount added · $remainingMemberCount remaining', style: const TextStyle(fontWeight: FontWeight.bold)),
+      if (remainingMemberCount == 0) note('Everyone in the signup household count has been added.'),
+    ] else Text('$addedMemberCount household member(s) added'),
+    if (members.any((m) => (m['name'] ?? '').trim().isEmpty)) note('Select Edit member to complete any existing unnamed entries.'),
+    const SizedBox(height: 16),
+    choice('pets', 'Do you have pets?', const {'yes': 'Yes', 'no': 'No'}),
     if (fields['pets'] == 'yes') ...[
       field('pet_count', 'Number of pets', keyboard: TextInputType.number),
       field('pet_details', 'Pet types and needs', lines: 2, hint: 'For example: two dogs, carriers, food and transport needs.'),
     ],
-    note('Medication and pet answers remain private in this local household checklist. Medication names are stored only in this private checklist; no doses are requested.'),
+    note('Medication details stay in your private household checklist on this device.'),
   ];
 
   Widget guideBullet(String title, List<String> details) => Padding(
@@ -414,9 +503,9 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
         if (fields['driver.${vehicles[i]}'] == 'other') field('driver_other.${vehicles[i]}', 'Driver name and contact'),
         field('seats.${vehicles[i]}', 'Usable seats for our household', keyboard: TextInputType.number, hint: 'Include the driver if they are a household member. Exclude seats occupied by people outside this household.'),
         choice('vehicle_confirmed.${vehicles[i]}', 'Driver and vehicle confirmed?', const {'unknown': 'Not confirmed yet', 'yes': 'Yes', 'no': 'No / need help'}),
-        TextButton(onPressed: saving ? null : () => setState(() => vehicles.removeAt(i)), child: const Text('Remove vehicle')),
+        TextButton(onPressed: saving ? null : () => changed(() => vehicles.removeAt(i)), child: const Text('Remove vehicle')),
       ],
-      OutlinedButton.icon(onPressed: saving ? null : () => setState(() => vehicles.add('vehicle.${DateTime.now().microsecondsSinceEpoch}.${vehicles.length}')), icon: const Icon(Icons.add), label: const Text('Add vehicle')),
+      OutlinedButton.icon(onPressed: saving ? null : () => changed(() => vehicles.add('vehicle.${DateTime.now().microsecondsSinceEpoch}.${vehicles.length}')), icon: const Icon(Icons.add), label: const Text('Add vehicle')),
       const SizedBox(height: 12),
       Text('$seatCount usable seats for $count household members.'),
       if (seatCount < count) note('${count - seatCount} more seat(s) or another transport arrangement needed.'),
@@ -451,7 +540,7 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
     final initial = saved == null || saved.isBefore(first) || saved.isAfter(last) ? now : saved;
     final date = await showDatePicker(context: context, initialDate: initial, firstDate: first, lastDate: last);
     if (!mounted || date == null) return;
-    setState(() => fields['review_date'] = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}');
+    changed(() => fields['review_date'] = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}');
   }
 
   Widget dateField() {
@@ -496,7 +585,7 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
           for (final issue in completionIssues) Text('• $issue'),
         ],
         const SizedBox(height: 12),
-        note('Community completion status: not connected. Save progress prepares only a completion summary locally; no information has been sent.'),
+        note('Community completion status: not connected. Saving prepares only a completion summary locally; no information has been sent.'),
         const SizedBox(height: 12), Text('$completed of $applicable applicable items complete'),
         Text('$assistance assistance requests'),
         if (!setupComplete) const Text('Confirm household details, medication and pet answers, and each added member’s details.'),
@@ -512,6 +601,7 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
     if ((fields['family'] ?? '').trim().isEmpty) 'Enter the family name in Step 1.',
     if ((fields['community'] ?? '').trim().isEmpty) 'Enter the community name in Step 1.',
     if (members.isEmpty) 'Add at least one household member in Step 1.',
+    if (remainingMemberCount > 0) 'Add $remainingMemberCount remaining household member(s) in Step 1.',
     if (!membersValid) 'Complete each member’s name, medication Yes/No answer and medication list where needed.',
     if (!['yes', 'no'].contains(fields['pets'])) 'Confirm whether the household has pets.',
     if (fields['pets'] == 'yes' && ((int.tryParse(fields['pet_count'] ?? '') ?? 0) <= 0 || (fields['pet_details'] ?? '').trim().isEmpty)) 'Complete the pet count and details.',
@@ -533,7 +623,7 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
       'Assistance requests: $assistance',
       'Review date: ${fields['review_date'] ?? 'Not set'}',
       'Last saved: ${savedAt ?? 'Not saved yet'}',
-      'These results reflect the current entries. Save progress to store them.',
+      'These results reflect the current entries. Check the saved message to confirm they are stored on this device.',
       if (!complete) ...['', 'REMAINING REQUIREMENTS', ...completionIssues],
       '', '1. HOUSEHOLD',
       'Family: ${fields['family'] ?? ''}',
@@ -582,6 +672,86 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
     return lines.join('\n');
   }
 
+  Widget resultsBody() {
+    const accent = Color(0xFF80CBC4);
+    const headings = {
+      'REMAINING REQUIREMENTS', '1. HOUSEHOLD', '2. SUPPLIES',
+      'Pet supplies', '3. EVACUATION ARRANGEMENTS', 'Evacuation checks',
+      '4. DWELLING PREPARATION', '5. FINAL REVIEW',
+    };
+    final medicationHeadings = members.where((m) => m['medication'] == 'yes')
+        .map((m) => 'Medication for ${m['name']}').toSet();
+    final lines = resultsText.split('\n');
+    final rows = <Widget>[];
+    // The first five lines are represented by the summary below.
+    for (final line in lines.skip(5)) {
+      if (line.isEmpty) continue;
+      if (headings.contains(line) || medicationHeadings.contains(line)) {
+        rows.add(Padding(
+          padding: const EdgeInsets.only(top: 24, bottom: 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SelectableText(line, style: const TextStyle(color: accent, fontSize: 16, fontWeight: FontWeight.bold, height: 1.4)),
+            const SizedBox(height: 8),
+            const Divider(height: 1, color: Colors.white24),
+          ]),
+        ));
+        continue;
+      }
+      final statusEntries = statuses.entries.where((s) => line.endsWith(': ${s.value}'));
+      if (statusEntries.isNotEmpty) {
+        final status = statusEntries.first;
+        final label = line.substring(0, line.length - status.value.length - 2);
+        final color = status.key == 'done' ? accent
+            : status.key == 'help' ? Colors.orangeAccent : Colors.white70;
+        rows.add(Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: Colors.white.withOpacity(0.04), borderRadius: BorderRadius.circular(8)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SelectableText(label, style: const TextStyle(fontSize: 14, height: 1.5)),
+            const SizedBox(height: 6),
+            Row(children: [
+              Icon(status.key == 'done' ? Icons.check_circle_outline
+                  : status.key == 'help' ? Icons.help_outline
+                  : status.key == 'na' ? Icons.remove_circle_outline : Icons.radio_button_unchecked,
+                color: color, size: 16),
+              const SizedBox(width: 6),
+              Expanded(child: Text(status.value, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600))),
+            ]),
+          ]),
+        ));
+      } else {
+        final separator = line.indexOf(': ');
+        rows.add(Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: separator < 0
+              ? SelectableText(line, style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.6))
+              : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Text(line.substring(0, separator), style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  SelectableText(line.substring(separator + 2), style: const TextStyle(fontSize: 14, height: 1.5)),
+                ]),
+        ));
+      }
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white.withOpacity(0.04), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('$completionPercentage% · ${complete ? 'Complete' : 'Incomplete'}', style: const TextStyle(color: accent, fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(value: completionPercentage / 100, color: accent, backgroundColor: Colors.white12),
+          const SizedBox(height: 12),
+          Text('$completed of $applicable applicable items complete', style: const TextStyle(height: 1.5)),
+          Text('Assistance requests: $assistance', style: const TextStyle(color: Colors.white70, height: 1.5)),
+        ]),
+      ),
+      const SizedBox(height: 16),
+      ...rows,
+    ]);
+  }
+
   Future<void> showResults() async {
     await showDialog<void>(context: context, builder: (context) => Dialog(
       child: ConstrainedBox(
@@ -589,7 +759,7 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
         child: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
           Text(complete ? 'Completed checklist results' : 'Checklist results — incomplete', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 16),
-          Expanded(child: SingleChildScrollView(child: SelectableText(resultsText))),
+          Expanded(child: Scrollbar(child: SingleChildScrollView(child: resultsBody()))),
           const SizedBox(height: 12),
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
         ])),
@@ -603,6 +773,7 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
     if (error != null) return Column(children: [Text(error!), TextButton(onPressed: () { setState(() => loading = true); load(); }, child: const Text('Retry'))]);
     final percent = completionPercentage;
     return Container(
+      key: checklistTop,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: const Color(0xFF14171A), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -616,29 +787,142 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
           ),
         ],
         const SizedBox(height: 12),
-        Text('Step ${step + 1} of 5 · ${steps[step]}'),
-        const SizedBox(height: 8),
         LinearProgressIndicator(value: completionPercentage / 100),
         const SizedBox(height: 8), Text('$percent% plan completion'),
         const SizedBox(height: 20),
-        ...content(),
+        if (step < 0) ...[
+          const Text('Your household plan', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          note('Work through one section at a time. You can return to any section later.'),
+          for (var index = 0; index < steps.length; index++)
+            Card(child: ListTile(
+              title: Text('${index + 1}. ${steps[index]}'),
+              subtitle: Text(sectionDone(index) ? 'Complete' : 'Needs attention'),
+              trailing: Text(sectionDone(index) ? 'Review' : savedAt == null ? 'Start' : 'Continue'),
+              onTap: saving ? null : () => goToStep(index),
+            )),
+          const SizedBox(height: 12),
+          FilledButton(onPressed: saving ? null : () => goToStep(0), child: Text(savedAt == null ? 'Start checklist' : 'Continue checklist')),
+        ] else ...[
+          Text('Step ${step + 1} of 5 · ${steps[step]}', style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          ...content(),
+          const SizedBox(height: 16),
+          Wrap(spacing: 12, runSpacing: 8, children: [
+            OutlinedButton(onPressed: saving ? null : () => goToStep(step == 0 ? -1 : step - 1), child: Text(step == 0 ? 'Back: Plan overview' : 'Back: ${steps[step - 1]}')),
+            if (step < 4) FilledButton(onPressed: saving ? null : () => goToStep(step + 1), child: Text('Next: ${steps[step + 1]}')),
+            if (step == 4) FilledButton(onPressed: saving ? null : () => goToStep(-1), child: const Text('Back to plan overview')),
+          ]),
+          TextButton(onPressed: saving ? null : () => goToStep(-1), child: const Text('View all sections')),
+        ],
         const SizedBox(height: 16),
-        Wrap(spacing: 12, runSpacing: 8, children: [
-          if (step > 0) OutlinedButton(onPressed: saving ? null : () => goToStep(step - 1), child: const Text('Back')),
-          if (step < 4) FilledButton(onPressed: saving ? null : () {
-            if (step == 0 && !membersValid) {
-              setState(() => showMemberErrors = true);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Complete each member’s name, Yes/No medication answer, and medication list where needed.')));
-              return;
-            }
-            goToStep(step + 1);
-          }, child: const Text('Next')),
-          OutlinedButton.icon(onPressed: saving ? null : save, icon: const Icon(Icons.save_outlined), label: Text(saving ? 'Saving…' : 'Save progress')),
+        Row(children: [
+          Icon(saveError != null ? Icons.error_outline : dirty || saving ? Icons.save_outlined : Icons.lock_outline, size: 18),
+          const SizedBox(width: 8),
+          Expanded(child: Text(saveError ?? (saving ? 'Saving on this device…' : dirty ? 'Changes waiting to save…' : savedAt != null ? 'Saved on this device' : 'Changes save automatically on this device.'))),
         ]),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(onPressed: saving ? null : () => save(), icon: const Icon(Icons.save_outlined), label: Text(saveError != null ? 'Retry save' : 'Save now')),
         const SizedBox(height: 16),
-        const Text('Private to this household account on this device. Not sent to community leaders or the backend. Save progress before leaving this panel.', style: TextStyle(color: Colors.white54, fontSize: 13)),
+        const Text('Private to this household account on this device. Not sent to community leaders or the backend. Changes save automatically on this device. Check the saved message before leaving.', style: TextStyle(color: Colors.white54, fontSize: 13)),
         if (savedAt != null) Text('Last saved: ${DateTime.tryParse(savedAt!)?.toLocal().toString().split('.').first ?? savedAt}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
       ]),
     );
   }
+}
+
+/// Edits a private draft; Cancel never changes the household's saved entries.
+class _HouseholdMemberDialog extends StatefulWidget {
+  const _HouseholdMemberDialog({required this.member, required this.medicines});
+  final Map<String, String> member;
+  final List<Map<String, String>> medicines;
+  @override
+  State<_HouseholdMemberDialog> createState() => _HouseholdMemberDialogState();
+}
+
+class _HouseholdMemberDialogState extends State<_HouseholdMemberDialog> {
+  final formKey = GlobalKey<FormState>();
+  late final TextEditingController name;
+  late final TextEditingController phone;
+  final medicine = TextEditingController();
+  late List<Map<String, String>> medicines;
+  String? takingMedication;
+  String? medicationError;
+  @override
+  void initState() {
+    super.initState();
+    name = TextEditingController(text: widget.member['name']);
+    phone = TextEditingController(text: widget.member['phone']);
+    takingMedication = ['yes', 'no'].contains(widget.member['medication']) ? widget.member['medication'] : null;
+    medicines = widget.medicines.map((m) => Map<String, String>.from(m)).toList();
+  }
+  @override
+  void dispose() { name.dispose(); phone.dispose(); medicine.dispose(); super.dispose(); }
+
+  bool addMedicine() {
+    final text = medicine.text.trim();
+    if (text.isEmpty) { setState(() => medicationError = 'Enter a medication name.'); return false; }
+    if (medicines.any((m) => m['name']!.toLowerCase() == text.toLowerCase())) {
+      setState(() => medicationError = 'This medication is already listed.'); return false;
+    }
+    setState(() {
+      medicines.add({'id': 'medicine.${DateTime.now().microsecondsSinceEpoch}.${medicines.length}', 'member_id': widget.member['id']!, 'name': text});
+      medicine.clear(); medicationError = null;
+    });
+    return true;
+  }
+
+  void submit() {
+    if (!formKey.currentState!.validate()) return;
+    if (takingMedication == null) { setState(() => medicationError = 'Choose Yes or No.'); return; }
+    if (takingMedication == 'yes' && medicine.text.trim().isNotEmpty && !addMedicine()) return;
+    if (takingMedication == 'yes' && medicines.isEmpty) { setState(() => medicationError = 'Add at least one medication name.'); return; }
+    Navigator.pop(context, <String, dynamic>{
+      'member': {...widget.member, 'name': name.text.trim(), 'phone': phone.text.trim(), 'medication': takingMedication!},
+      'medicines': medicines,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text((widget.member['name'] ?? '').isEmpty ? 'Add household member' : 'Edit household member'),
+    content: SizedBox(width: 440, child: SingleChildScrollView(child: Form(key: formKey, child: Column(
+      mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Text('Member details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        TextFormField(controller: name, autofocus: true, textCapitalization: TextCapitalization.words, textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(labelText: 'Name (required)', border: OutlineInputBorder()),
+          validator: (value) => (value ?? '').trim().isEmpty ? 'Enter a name.' : null),
+        const SizedBox(height: 16),
+        TextFormField(controller: phone, keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(labelText: 'Phone number (optional)', border: OutlineInputBorder())),
+        const SizedBox(height: 20),
+        const Text('Currently taking medication?', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 12, runSpacing: 8, children: [
+          for (final value in ['yes', 'no'])
+            takingMedication == value
+              ? FilledButton(onPressed: () => setState(() { takingMedication = value; medicationError = null; }), child: Text(value == 'yes' ? 'Yes' : 'No'))
+              : OutlinedButton(onPressed: () => setState(() { takingMedication = value; medicationError = null; }), child: Text(value == 'yes' ? 'Yes' : 'No')),
+        ]),
+        if (takingMedication == 'yes') ...[
+          const SizedBox(height: 16),
+          TextField(controller: medicine, textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Medication name', border: OutlineInputBorder()),
+            onSubmitted: (_) => addMedicine()),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(onPressed: addMedicine, icon: const Icon(Icons.add), label: const Text('Add medication')),
+          for (final entry in medicines)
+            Row(children: [Expanded(child: Text(entry['name']!)), IconButton(tooltip: 'Remove medication', onPressed: () => setState(() => medicines.remove(entry)), icon: const Icon(Icons.close))]),
+          const Text('Record names only. No doses needed.', style: TextStyle(color: Colors.white70)),
+        ],
+        if (medicationError != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(medicationError!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
+        const SizedBox(height: 20),
+        FilledButton(onPressed: submit, child: const Text('Save member')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        const SizedBox(height: 12),
+        const Text('Medication details stay in your private household checklist on this device.', style: TextStyle(color: Colors.white70, fontSize: 12)),
+      ],
+    )))),
+  );
 }
