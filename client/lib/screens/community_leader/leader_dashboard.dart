@@ -36,16 +36,25 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     },
   ];
 
+  /// Loads live community profile statistics dynamically out of your SQLite storage configuration tables.
   Future<Map<String, String>> _loadCommunityStats() async {
-    final name =
+    // 🛠️ UPDATED: Check 'auth_community_name' first, fall back to leader path keys, then to your new community name
+    final String name =
+        await DatabaseHelper.instance.getConfig('auth_community_name') ??
         await DatabaseHelper.instance.getConfig('auth_leader_community') ??
-        'Trujneya';
-    final households =
+        'Unknown Community';
+
+    // Dynamically retrieve metrics or display baseline figures for a freshly generated community zone
+    final String households =
+        await DatabaseHelper.instance.getConfig('auth_households_count') ??
         await DatabaseHelper.instance.getConfig('community_households_count') ??
-        '2';
-    final members =
+        '1';
+
+    final String members =
+        await DatabaseHelper.instance.getConfig('auth_members_count') ??
         await DatabaseHelper.instance.getConfig('community_members_count') ??
-        '10';
+        '1';
+
     return {'name': name, 'households': households, 'members': members};
   }
 
