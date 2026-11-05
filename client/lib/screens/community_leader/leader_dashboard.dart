@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../services/database_helper.dart';
 import '../login_page.dart';
-import 'components/leader_side_pill.dart';
 import 'components/leader_reports_log.dart';
 
 class LeaderDashboard extends StatefulWidget {
@@ -13,7 +12,8 @@ class LeaderDashboard extends StatefulWidget {
 }
 
 class _LeaderDashboardState extends State<LeaderDashboard> {
-  int? _sideIndex;
+  int _bottomIndex =
+      0; // Standard bottom navigation item controller index tracking
 
   final List<Map<String, dynamic>> _reports = [
     {
@@ -36,25 +36,16 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     },
   ];
 
-  /// Loads live community profile statistics dynamically out of your SQLite storage configuration tables.
   Future<Map<String, String>> _loadCommunityStats() async {
-    // 🛠️ UPDATED: Check 'auth_community_name' first, fall back to leader path keys, then to your new community name
-    final String name =
+    final name =
         await DatabaseHelper.instance.getConfig('auth_community_name') ??
-        await DatabaseHelper.instance.getConfig('auth_leader_community') ??
-        'Unknown Community';
-
-    // Dynamically retrieve metrics or display baseline figures for a freshly generated community zone
-    final String households =
-        await DatabaseHelper.instance.getConfig('auth_households_count') ??
+        'Bruhyna';
+    final households =
         await DatabaseHelper.instance.getConfig('community_households_count') ??
         '1';
-
-    final String members =
-        await DatabaseHelper.instance.getConfig('auth_members_count') ??
+    final members =
         await DatabaseHelper.instance.getConfig('community_members_count') ??
         '1';
-
     return {'name': name, 'households': households, 'members': members};
   }
 
@@ -70,54 +61,41 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
       body: FutureBuilder<Map<String, String>>(
         future: _loadCommunityStats(),
         builder: (context, snapshot) {
-          final name = snapshot.data?['name'] ?? 'Trujneya';
-          final households = snapshot.data?['households'] ?? '2';
-          final members = snapshot.data?['members'] ?? '10';
+          final name = snapshot.data?['name'] ?? 'Bruhyna';
+          final households = snapshot.data?['households'] ?? '1';
+          final members = snapshot.data?['members'] ?? '1';
 
-          return Stack(
-            children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Community $name',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Households: $households\nMembers: $members',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.white60,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 48.0),
-                      child: _buildDynamicBodyContent(),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Community $name',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: LeaderSidePill(
-                  sideIndex: _sideIndex,
-                  onChanged: (idx) => setState(() => _sideIndex = idx),
-                  onOpenAnnouncementWizard: _showAnnouncementWizard,
+                const SizedBox(height: 4),
+                Text(
+                  'Households: $households\nMembers: $members',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.white60,
+                    height: 1.2,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+
+                // Active Core Render Shell
+                _buildDynamicBodyContent(),
+                const SizedBox(height: 24),
+              ],
+            ),
           );
         },
       ),
@@ -126,12 +104,13 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   }
 
   Widget _buildDynamicBodyContent() {
-    if (_sideIndex == 2)
+    if (_bottomIndex == 1)
       return _buildPlaceholderCard(
         'Community Action Plan Matrix',
         Icons.assignment,
       );
 
+    // Default Index (0) -> Core Overview Panels Stack Card views
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -225,40 +204,44 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   }
 
   Widget _buildBottomNav() {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        navigationBarTheme: _sideIndex != null
-            ? const NavigationBarThemeData(indicatorColor: Colors.transparent)
-            : Theme.of(context).navigationBarTheme,
-      ),
-      child: NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (idx) {
-          if (idx == 0) setState(() => _sideIndex = null);
-          if (idx == 2)
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const LoginPage()),
-            );
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_circle_outlined),
-            selectedIcon: Icon(Icons.account_circle),
-            label: 'Profile',
-          ),
-        ],
-      ),
+    return NavigationBar(
+      selectedIndex: _bottomIndex > 2 ? 0 : _bottomIndex, // Ensures fallback highlight maps to Home safely during popups
+      onDestinationSelected: (idx) {
+        if (idx == 2) {
+          // Trigger the stateful dialog popup interface directly
+          _showAnnouncementWizard();
+        } else if (idx == 3) {
+          // Route direct page navigation context straight over the account profile portal
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+          );
+        } else {
+          setState(() => _bottomIndex = idx);
+        }
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Home',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.assignment_outlined),
+          selectedIcon: Icon(Icons.assignment),
+          label: 'Plan',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.add_comment_outlined, color: Color(0xFF4DB6AC)),
+          selectedIcon: Icon(Icons.add_comment, color: Color(0xFF4DB6AC)),
+          label: 'Broadcast',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.account_circle_outlined),
+          selectedIcon: Icon(Icons.account_circle),
+          label: 'Profile',
+        ),
+      ],
     );
   }
 

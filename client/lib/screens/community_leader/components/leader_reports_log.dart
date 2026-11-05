@@ -184,29 +184,53 @@ class LeaderReportsLog extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.redAccent,
-                  side: const BorderSide(color: Colors.redAccent),
+              // Wrapped the Invalidate button with Expanded
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.redAccent,
+                    side: const BorderSide(color: Colors.redAccent),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                    ), // Removed horizontal padding
+                  ),
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  label: const Text(
+                    'Invalidate',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  onPressed: () {
+                    onStatusChanged(index, false);
+                    Navigator.pop(context);
+                  },
                 ),
-                icon: const Icon(Icons.close_rounded, size: 16),
-                label: const Text('Invalidate'),
-                onPressed: () {
-                  onStatusChanged(index, false);
-                  Navigator.pop(context);
-                },
               ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4DB6AC),
-                  foregroundColor: const Color(0xFF14171A),
+              const SizedBox(
+                width: 8,
+              ), // Clean separator spacing between buttons
+              // Wrapped the Validate Report button with Expanded
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4DB6AC),
+                    foregroundColor: const Color(0xFF14171A),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                    ), // Removed horizontal padding
+                  ),
+                  icon: const Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 16,
+                  ),
+                  label: const Text(
+                    'Validate Report',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    onStatusChanged(index, true);
+                    Navigator.pop(context);
+                  },
                 ),
-                icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
-                label: const Text('Validate Report'),
-                onPressed: () {
-                  onStatusChanged(index, true);
-                  Navigator.pop(context);
-                },
               ),
             ],
           ),
