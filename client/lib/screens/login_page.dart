@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'household/household_dashboard.dart';
 import 'community_leader/leader_dashboard.dart';
 import '../widgets/auth_dialog.dart';
@@ -11,10 +12,7 @@ class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Account Access'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Account Access'), centerTitle: true),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -24,10 +22,7 @@ class LoginPage extends StatelessWidget {
             const Text(
               'Welcome to EchoGround',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 12),
@@ -44,8 +39,8 @@ class LoginPage extends StatelessWidget {
               label: const Text('Continue as Household'),
               onPressed: () {
                 showLoginDialog(
-                  context, 
-                  isLeader: false, 
+                  context,
+                  isLeader: false,
                   onAuthSuccess: () {
                     Navigator.pushAndRemoveUntil(
                       context,
@@ -66,8 +61,8 @@ class LoginPage extends StatelessWidget {
               label: const Text('Continue as Community Leader'),
               onPressed: () {
                 showLoginDialog(
-                  context, 
-                  isLeader: true, 
+                  context,
+                  isLeader: true,
                   onAuthSuccess: () {
                     Navigator.pushAndRemoveUntil(
                       context,
@@ -93,37 +88,48 @@ class LoginPage extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
               icon: const Icon(Icons.logout_rounded, size: 18),
-              label: const Text('Log Out / Exit Account Session', style: TextStyle(fontWeight: FontWeight.bold)),
+              label: const Text(
+                'Log Out / Exit Account Session',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               onPressed: () async {
-                await DatabaseHelper.instance.saveConfig('auth_household_id', '');
+                await DatabaseHelper.instance.saveConfig(
+                  'auth_household_id',
+                  '',
+                );
                 await DatabaseHelper.instance.saveConfig('auth_leader_id', '');
-                await DatabaseHelper.instance.saveConfig('household_last_name', '');
+                await DatabaseHelper.instance.saveConfig(
+                  'household_last_name',
+                  '',
+                );
                 await DatabaseHelper.instance.saveConfig('household_count', '');
 
                 DatabaseHelper.instance.syncNotifier.value++;
 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar( 
+                    SnackBar(
                       content: const Text(
                         'Session cleared successfully. Reverted to Guest Mode.',
                         style: TextStyle(
-                          color: Color.fromARGB(255, 30, 30, 30),                         
+                          color: Color.fromARGB(255, 30, 30, 30),
                           fontWeight: FontWeight.normal,
                         ),
                       ),
-                      
-                      backgroundColor: Colors.tealAccent.shade400, 
+
+                      backgroundColor: Colors.tealAccent.shade400,
                       duration: const Duration(seconds: 3),
                     ),
                   );
                 }
 
-                // FIXED ROUTING: Instead of just popping the overlay, it forces the entire application 
+                // FIXED ROUTING: Instead of just popping the overlay, it forces the entire application
                 // to re-evaluate through the AppGatekeeper. This drops the UI back into your real Guest Mode dashboard
                 Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(builder: (context) => const AppGatekeeper()),
+                  MaterialPageRoute(
+                    builder: (context) => const AppGatekeeper(),
+                  ),
                   (route) => false,
                 );
               },
