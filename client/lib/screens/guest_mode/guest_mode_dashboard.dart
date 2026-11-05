@@ -7,6 +7,7 @@ import '../../widgets/household/preparedness_card.dart';
 import '../../widgets/household/community_updates_card.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../login_page.dart';
+import '../../widgets/report_dialog.dart';
 
 //import 'package:maplibre_gl/maplibre_gl.dart';
 
@@ -56,7 +57,9 @@ class GuestModeDashboard extends StatelessWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
         onDestinationSelected: (index) {
-          if (index == 2) {
+          if (index == 1) {
+            showReportDialog(context);
+          } else if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -67,15 +70,19 @@ class GuestModeDashboard extends StatelessWidget {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.warning),
+            icon: Icon(Icons.crisis_alert_outlined),
+            selectedIcon: Icon(Icons.crisis_alert),
             label: 'Incidents',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person),
+            icon: Icon(Icons.report_outlined, color: Colors.redAccent, size: 34),
+            selectedIcon: Icon(Icons.report, color: Colors.redAccent, size: 34),
+            label: 'Report',
+          ),
+          // FIXED: Replaced "Contacts" layout destination item properties with "Profile"
+          NavigationDestination(
+            icon: Icon(Icons.account_circle_outlined),
+            selectedIcon: Icon(Icons.account_circle),
             label: 'Profile',
           ),
         ],
