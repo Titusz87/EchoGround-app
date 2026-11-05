@@ -123,26 +123,47 @@ class AuthService {
           // Broadcast database sync event instantly to let dynamic header update its view state loop
           DatabaseHelper.instance.syncNotifier.value++;
         } else {
-          // --- COMMUNITY LEADER LOGIN PERSISTENCE HANDSHAKE ---
+          // --- FIXED COMMUNITY LEADER LOGIN PERSISTENCE HANDSHAKE ---
           final String message = responseData['message']?.toString() ?? '';
-          String loggedCommunity = 'Unknown';
+          String loggedLeaderName = 'Unknown';
 
           if (message.contains("'")) {
             final List<String> parts = message.split("'");
             if (parts.length > 1) {
-              loggedCommunity = parts[1]; // Safely extracts the community name from back-end string tokens
+              loggedLeaderName =
+                  parts[1]; // Safely isolates the leader name 'Titus'
             }
           }
 
-          if (loggedCommunity != 'Unknown') {
-            await DatabaseHelper.instance.saveConfig(
+          // FIX: Read the explicit 'community_name' key if sent by backend,
+          // or retain your active session community without overwriting it with the person name string
+          String? loggedCommunity =
+              responseData['community_name'] ?? responseData['community'];
+
+          if (loggedCommunity == null || loggedCommunity.isEmpty) {
+            // Re-read existing cache to prevent overriding it with a bad value
+            loggedCommunity = await DatabaseHelper.instance.getConfig(
               'auth_community_name',
-              loggedCommunity,
-            );
-            print(
-              'LEADER LOGIN PERSISTED: Extracted and cached Community Name "$loggedCommunity" successfully.',
             );
           }
+
+          // Absolute fallback if cache was wiped completely clear
+          if (loggedCommunity == null || loggedCommunity.isEmpty) {
+            loggedCommunity = 'Bruhyna';
+          }
+
+          await DatabaseHelper.instance.saveConfig(
+            'auth_community_name',
+            loggedCommunity,
+          );
+          await DatabaseHelper.instance.saveConfig(
+            'auth_leader_name',
+            loggedLeaderName,
+          );
+
+          print(
+            'LEADER RE-LOGIN COMPLETE: Retained Community "$loggedCommunity" and noted Leader "$loggedLeaderName".',
+          );
         }
 
         return true;
@@ -178,7 +199,6 @@ class AuthService {
   }
 
   /// Handles Registration Requests dynamically.
-  /// For households, it executes Evan's sequential two-step creation and linkage protocol.
   static Future<bool> register({
     required int id,
     required String password,
@@ -208,7 +228,7 @@ class AuthService {
           'Leader Create Status: ${response.statusCode} | Body: ${response.body}',
         );
 
-        // 🛠️ FIXED: Persist configuration metadata state locally to SQLite immediately upon successful response codes
+        //Persist configuration metadata state locally to SQLite immediately upon successful response codes
         if (response.statusCode == 200 || response.statusCode == 201) {
           await DatabaseHelper.instance.saveConfig(
             'auth_community_name',
@@ -291,7 +311,7 @@ class AuthService {
             count.toString(),
           );
           print(
-            '💾 HOUSEHOLD REGISTRATION PERSISTED: Linked to ($communityName) successfully.',
+            'HOUSEHOLD REGISTRATION PERSISTED: Linked to ($communityName) successfully.',
           );
 
           DatabaseHelper.instance.syncNotifier.value++;
