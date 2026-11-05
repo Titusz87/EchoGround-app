@@ -6,6 +6,8 @@ from app.database import get_session
 from app.services.create_records import create_household, create_emergency_report
 from app.services.login import login
 from app.services import db_helpers as db
+from app.services import firebase
+import json
 
 #-----------------------------------------
 
@@ -148,18 +150,39 @@ def send_emergency_report_to_db(data: EmergencyReportRegistrationRequest):
         if household.community_leader_id is None:
             raise HTTPException(status_code=401, detail= f"household '{household.last_name}' does not belong to a community")
 
-        #now we can create the actual report 
-        creation_status = create_emergency_report(data.id, household.community_leader_id, data.title, data.location, data.description)
-        if creation_status is not True:
+        #now we can create the actual report for the db
+        report = create_emergency_report(data.id, household.community_leader_id, data.title, data.location, data.description)
+        if report is None:
             raise HTTPException(status_code=404, detail= "Failed to submit emergency report")
 
+        #now we send push notifications to both the community leader and the households in the community 
         community_leader = session.get(models.Community_Leader, household.community_leader_id)
+        message = f"{data.title} has been reported to {community_leader.community_name}!"
+        send_data = {"type": "Emergency Report", "title": data.title, "location": data.location, "description": data.description, "household name": household.last_name, "report id": str(report.id), "created": str(report.created)}
+
+        #send community leader a push notification 
+        pushed_to_leader = False
+        if community_leader is not None:
+            person = session.get(models.People, community_leader.id)
+            pushed_to_leader = firebase.send_firebase_notification(f"New Emergency Report", message, person.fcm_token, send_data)
+
+        #send all households in the community a push notification
+        household_sent_count = 0
+        for id in community_leader.community_members: 
+            person = session.get(models.People, id)
+            sent = firebase.send_firebase_notification(f"New Emergency Report", message, person.fcm_token, send_data)
+            if sent:
+                household_sent_count += 1
+
+        community_members = len(community_leader.community_members)
         return {
             "status": "ok",
-            "message" : f"Submitted emergency report '{data.title}' to community: {community_leader.community_name}"
+            "message0": (f"Sent emergency report '{data.title}' to {community_leader.first_name}" if pushed_to_leader
+                else f"Failed to send emergency report '{data.title}' to {community_leader.first_name}"),
+            "message1" : f"Sent emergency report '{data.title}' to {household_sent_count}/{community_members} community members in community '{community_leader.community_name}'"
         }
 
-        #NOTE: this could be a push notification to the community leader
+#-------------------------------------------------------------------------------------
 
 
 

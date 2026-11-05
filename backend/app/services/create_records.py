@@ -91,7 +91,7 @@ def create_emergency_report(_sender_id, _community_leader_id, _title, _location,
         session.add(emergency_report)
         session.commit()
         print(f"Successfully created emergency report '{emergency_report.title}'")
-        return True
+        return emergency_report
 
 def create_community_plans(_community_leader_id, _community_name, _data):
     with get_session() as session:

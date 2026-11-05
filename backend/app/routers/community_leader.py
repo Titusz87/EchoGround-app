@@ -164,10 +164,13 @@ def create_community_specific_plans(data: CommunityLeaderPlanCreationRequest):
             "message": f"created community plans for {community_leader.community_name}"
             }
 
+#-------------------------------------------------------------------------------------
+
 class CommunityLeaderPublishNotificationRequest(BaseModel):
     id: int
     body: str
 
+#sends push notifications
 @router.post("/community-leader/publish-notification")
 def send_a_notification_to_all_community_members(data: CommunityLeaderPublishNotificationRequest):
     with get_session() as session:
@@ -186,11 +189,54 @@ def send_a_notification_to_all_community_members(data: CommunityLeaderPublishNot
         #retrieve all the fcm tokens
         person_rows = db.get_rows_from_ids(session, models.People, community_leader.community_members)
         sent_count = 0
+        send_data = {"type": "Community Announcement", "Community Leader": community_leader.first_name, "Message": data.body}             #this dict has to be all strings 
+        message = f"New community notification for {community_leader.community_name}!"
         for person in person_rows:
-            success = firebase.send_firebase_notification(f"New community notification from {community_leader.first_name}", data.body, person.fcm_token)
+            success = firebase.send_firebase_notification(f"New Community Notification", message, person.fcm_token, send_data)
             if success:
                 sent_count += 1
         return {
             "status": "ok",
             "message": f"Sent {sent_count} notifications to community members in '{community_leader.community_name}'"
             }
+
+#--------------------------------------------------------------------------------------------
+class CommunityLeaderReportValidationRequest(BaseModel):
+    id: int
+    report_id: int
+
+@router.post("/community-leader/validate-report")
+def validate_an_emergency_report_for_a_community(data: CommunityLeaderReportValidationRequest):
+    with get_session() as session:
+        
+        #verify id exists
+        verification = verify_person_creds(data.id)
+        if verification is not True:
+            raise HTTPException(status_code=401, detail= verification)
+
+        #check community leader exists
+        community_leader = session.get(models.Community_Leader, data.id)
+        if community_leader is None:
+            raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
+
+        #check report id exists
+        report = session.get(models.Emergency_Report, data.report_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail= "Report id does not exist in db records")
+
+        #now finally, push notifications to all households
+        message = f"{report.title} has been validated by {community_leader.first_name}!"
+        send_data = {"type": "Emergency Report Validated", "report id": str(report.id)} 
+        
+        household_sent_count = 0
+        for id in community_leader.community_members: 
+            person = session.get(models.People, id)
+            sent = firebase.send_firebase_notification(f"New Emergency Report Validation", message, person.fcm_token, send_data)
+            if sent:
+                household_sent_count += 1
+        
+        community_members = len(community_leader.community_members)
+        return {
+            "status": "ok",
+            "message" : f"Sent validated emergency report '{report.title}' to {household_sent_count}/{community_members} community members in community '{community_leader.community_name}'"
+        }
