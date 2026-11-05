@@ -17,11 +17,10 @@ class AuthService {
       'backend_person_id',
     );
 
-    // FIXED: Automatic background registration trigger loop has been completely removed!
     // If it's missing, we let it stay null so the app doesn't force a setup handshake on boot.
     if (savedPersonId == null || savedPersonId.isEmpty) {
       print(
-        "ℹ️ Local identity profile empty. Preserving Guest Mode profile canvas...",
+        "Local identity profile empty. Preserving Guest Mode profile canvas...",
       );
       return null;
     }
@@ -123,6 +122,27 @@ class AuthService {
 
           // Broadcast database sync event instantly to let dynamic header update its view state loop
           DatabaseHelper.instance.syncNotifier.value++;
+        } else {
+          // --- COMMUNITY LEADER LOGIN PERSISTENCE HANDSHAKE ---
+          final String message = responseData['message']?.toString() ?? '';
+          String loggedCommunity = 'Unknown';
+
+          if (message.contains("'")) {
+            final List<String> parts = message.split("'");
+            if (parts.length > 1) {
+              loggedCommunity = parts[1]; // Safely extracts the community name from back-end string tokens
+            }
+          }
+
+          if (loggedCommunity != 'Unknown') {
+            await DatabaseHelper.instance.saveConfig(
+              'auth_community_name',
+              loggedCommunity,
+            );
+            print(
+              'LEADER LOGIN PERSISTED: Extracted and cached Community Name "$loggedCommunity" successfully.',
+            );
+          }
         }
 
         return true;
@@ -187,6 +207,26 @@ class AuthService {
         print(
           'Leader Create Status: ${response.statusCode} | Body: ${response.body}',
         );
+
+        // 🛠️ FIXED: Persist configuration metadata state locally to SQLite immediately upon successful response codes
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          await DatabaseHelper.instance.saveConfig(
+            'auth_community_name',
+            communityName,
+          );
+          await DatabaseHelper.instance.saveConfig(
+            'community_households_count',
+            '1',
+          );
+          await DatabaseHelper.instance.saveConfig(
+            'community_members_count',
+            '1',
+          );
+          print(
+            'LEADER REGISTRATION PERSISTED: Successfully saved Community "$communityName" to database config keys.',
+          );
+        }
+
         return response.statusCode == 200 || response.statusCode == 201;
       } else {
         // --- HOUSEHOLD ACCOUNT FLOW (TWO-STEP CHAIN) ---
@@ -235,7 +275,6 @@ class AuthService {
 
         if (registerResponse.statusCode == 200 ||
             registerResponse.statusCode == 201) {
-          // --- PERSIST DYNAMIC METADATA LOCALLY TO SQLITE ON SUCCESS ---
           String savedLastName = secondaryName;
           final String message = createData['message']?.toString() ?? '';
 
@@ -252,14 +291,12 @@ class AuthService {
             count.toString(),
           );
           print(
-            'LOCAL SQLITE STORAGE LOCKED: Account created and linked to ($communityName) successfully.',
+            '💾 HOUSEHOLD REGISTRATION PERSISTED: Linked to ($communityName) successfully.',
           );
 
-          // Broadcast database sync event instantly to let your dynamic header update live
           DatabaseHelper.instance.syncNotifier.value++;
           return true;
         }
-
         print('Step 2 Failed: Community relationship assignment rejected.');
         return false;
       }
