@@ -9,6 +9,22 @@ import 'notification_service.dart';
 class AuthService {
   static const String _backendBaseUrl = String.fromEnvironment('BACKEND_URL');
 
+  // Account-scoped metadata used to initialise the private checklist.
+  static Future<Map<String, dynamic>> _householdProfile(int id) async {
+    final raw = await DatabaseHelper.instance.getConfig('household_profile.v1.$id');
+    if (raw == null || raw.isEmpty) return {};
+    try { return Map<String, dynamic>.from(jsonDecode(raw) as Map); }
+    catch (_) { return {}; }
+  }
+
+  static Future<void> _saveHouseholdProfile(int id, {String? family, String? community, int? count}) async {
+    final profile = await _householdProfile(id);
+    if (family != null && family.trim().isNotEmpty && family != 'Unknown') profile['family'] = family.trim();
+    if (community != null && community.trim().isNotEmpty) profile['community'] = community.trim();
+    if (count != null && count > 0) profile['count'] = count;
+    await DatabaseHelper.instance.saveConfig('household_profile.v1.$id', jsonEncode(profile));
+  }
+
   /// Verifies if local storage holds a valid backend identity key.
   /// Safely returns null on missing values so the dashboard stays in Guest Mode.
   static Future<int?> ensureBackendPersonId(BuildContext context) async {
@@ -84,9 +100,13 @@ class AuthService {
 
           // DYNAMIC MEMBER COUNT PARSER WITH LOCAL PERSISTENCE PREFERENCE:
           // Try to read if a value was permanently logged during the registration session first
-          String? extractedCount = await DatabaseHelper.instance.getConfig(
-            'household_count',
-          );
+          final profile = await _householdProfile(id);
+          final legacyOwner = await DatabaseHelper.instance.getConfig('backend_person_id');
+          String? extractedCount = (responseData['count'] ?? responseData['members_count'])?.toString()
+              ?? profile['count']?.toString();
+          if ((extractedCount == null || extractedCount.isEmpty) && legacyOwner == id.toString()) {
+            extractedCount = await DatabaseHelper.instance.getConfig('household_count');
+          }
 
           // If it's missing or empty from database cache, check if backend sent an explicit JSON key
           if (extractedCount == null || extractedCount.isEmpty) {
@@ -115,6 +135,12 @@ class AuthService {
           await DatabaseHelper.instance.saveConfig(
             'household_count',
             finalCountString,
+          );
+
+          await _saveHouseholdProfile(id,
+            family: responseData['last_name']?.toString() ?? profile['family']?.toString() ?? loggedName,
+            community: responseData['community_name']?.toString(),
+            count: int.tryParse(finalCountString),
           );
 
           print(
@@ -230,6 +256,8 @@ class AuthService {
             'household_count',
             count.toString(),
           );
+          await _saveHouseholdProfile(id, family: secondaryName, community: communityName, count: count);
+
           print(
             'LOCAL STORAGE SYNCED ON CREATION: Saved Last Name ($savedLastName) and count ($count) permanently to SQLite.',
           );

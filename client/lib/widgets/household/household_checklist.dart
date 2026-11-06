@@ -171,12 +171,21 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
   void initState() { super.initState(); load(); }
 
   Future<void> load() async {
+    var stage = 'session';
     try {
       final db = DatabaseHelper.instance;
       final id = int.tryParse(await db.getConfig('auth_household_id') ?? '');
-      if (id == null || id <= 0) throw StateError('Not signed in');
+      if (id == null || id < 0) {
+        if (mounted) setState(() {
+          loading = false;
+          error = 'No valid household session. Open Profile and sign in as Household.';
+        });
+        return;
+      }
+      stage = 'checklist storage';
       final raw = await db.getConfig('household_checklist.v1.$id');
       if (raw != null && raw.isNotEmpty) {
+        stage = 'saved checklist format';
         final json = jsonDecode(raw) as Map<String, dynamic>;
         final loadedFields = Map<String, String>.from(json['fields'] as Map);
         final loadedMembers = (json['members'] as List).map((m) => Map<String, String>.from(m as Map)).toList();
@@ -191,6 +200,7 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
           members[i].putIfAbsent('medication', () => 'unknown');
         }
       }
+      stage = 'household profile';
       // Fill gaps only. Never replace a household's existing checklist entries.
       Map<String, dynamic> profile = {};
       final profileRaw = await db.getConfig('household_profile.v1.$id');
@@ -222,11 +232,20 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
         fields['registration_count_imported'] = 'yes';
         imported = true;
       }
+      stage = 'session check';
       if (await db.getConfig('auth_household_id') != id.toString()) throw StateError('Account changed');
       if (mounted) setState(() { owner = id; loading = false; error = null; });
       if (imported && mounted) { dirty = true; editVersion++; await save(quiet: true); }
-    } catch (_) {
-      if (mounted) setState(() { loading = false; error = 'Sign in as a household to continue. If already signed in, the saved checklist could not be loaded.'; });
+    } catch (failure) {
+      debugPrint('Household checklist load failed at $stage (${failure.runtimeType}).');
+      if (mounted) setState(() {
+        loading = false;
+        error = stage == 'saved checklist format'
+            ? 'The saved checklist format could not be read. Your saved data has been kept.'
+            : stage == 'session check'
+                ? 'The household session could not be verified. Sign in again from Profile.'
+                : 'Could not read local $stage. Select Retry to try again.';
+      });
     }
   }
 
@@ -759,7 +778,7 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
         child: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
           Text(complete ? 'Completed checklist results' : 'Checklist results — incomplete', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 16),
-          Expanded(child: Scrollbar(child: SingleChildScrollView(child: resultsBody()))),
+          Expanded(child: SingleChildScrollView(child: resultsBody())),
           const SizedBox(height: 12),
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
         ])),
