@@ -184,5 +184,43 @@ def send_emergency_report_to_db(data: EmergencyReportRegistrationRequest):
 
 #-------------------------------------------------------------------------------------
 
+class HouseholdRefreshPageRequest(BaseModel):
+    id: int
 
+@router.post("/household/refresh-dashboard")
+def refresh_stale_data_on_the_dashboard(data: HouseholdRefreshPageRequest):
+    with get_session() as session:
+        #default safety check to check the person exists
+        verification = verify_person_creds(data.id) #data.fcm_token)
+        if verification is not True:
+                raise HTTPException(status_code=401, detail= verification)
+                
+        #check that the household exits. It should, because this route will be used on the household dashboard
+        household = session.get(models.Household, data.id)
+        if household is None:
+            raise HTTPException(status_code=404, detail= f"id:{data.id} does not have a household")
 
+        #now that we know there is a valid household, check whether it belongs to a community
+        if household.community_leader_id is None:
+            raise HTTPException(status_code=403, detail= f"household '{household.last_name}' does not belong to a community")
+
+        #now, we can pull any data from the server that we want:
+        community_leader = session.get(models.Community_Leader, household.community_leader_id)
+        if community_leader is None:
+            raise HTTPException(status_code=404, detail= f"community leader value in household was incorrectly set")
+
+        members_count = 0
+        for id in community_leader.community_members:
+            member_household = session.get(models.Household, id)
+            if member_household is not None:
+                members_count += member_household.count
+        
+        return {
+            "status": "ok",
+            "message": "pulled necessary data for household dashboard from servers",
+            "data": {"community name": community_leader.community_name,
+                     "community leader name": community_leader.first_name,
+                     "community households count": len(community_leader.community_members or []),
+                     "community members count": members_count
+                     } 
+        }

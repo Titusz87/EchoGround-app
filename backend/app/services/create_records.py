@@ -104,7 +104,7 @@ def create_community_plans(_community_leader_id, _community_name, _data):
                 )
         session.add(community_plans)
         session.commit()
-        print(f"Successfully created community plans for {_community_name}")
+        print(f"Successfully created community plans for {community_plans.community_name}")
         return True
 
 
