@@ -49,10 +49,12 @@ class _ReportDialogState extends State<ReportDialog> {
     setState(() => _isSending = true);
 
     try {
-      // 1. Fetch backend base configurations and active profile context references
-      final String backendUrl =
-          await DatabaseHelper.instance.getConfig('BACKEND_URL') ??
-          'http://127.0.0.1:8000';
+      // FIXED: Reads production server URL directly from the compile environment macro instead of an empty database
+      const String backendUrl = String.fromEnvironment(
+        'BACKEND_URL',
+        defaultValue: 'http://127.0.0.1:8000',
+      );
+
       final String? personId = await DatabaseHelper.instance.getConfig(
         'backend_person_id',
       );
