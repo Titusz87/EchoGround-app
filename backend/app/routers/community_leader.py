@@ -7,6 +7,7 @@ from app.services.create_records import create_community_leader, create_communit
 from app.routers.household import LoginRequest
 from app.services.login import login
 from app.services import db_helpers as db
+from app.services import firebase
 
 #-----------------------------------------
 
@@ -131,9 +132,25 @@ def update_incidents_to_be_validated_by_community_leader(data: CommunityLeaderVa
                 incident.validated_by = validated_by
         session.commit()
 
+        #finally, we also want to push the validated incidents to all community members
+        #all community members are aware of all incidents affecting the community, not just themselves 
+        households_messaged = 0
+        for id in community_leader.community_members: 
+            person = session.get(models.People, id)
+            sent_message = False
+            for incident in incidents:
+                message = f"{incident.event_type} has been validated by {community_leader.community_name}!"
+                send_data = firebase.row_to_firebase_data(incident)
+                success = firebase.send_firebase_notification(f"New Validated Incident", message, person.fcm_token, send_data)
+                if success:
+                    sent_message = True
+            if sent_message:
+                households_messaged += 1
+
         return {
             "status": "ok",
-            "message": f"updated {len(incidents)} incidents in the db to be validated by '{community_leader.community_name}' with notice '{data.notice}'"
+            "message0": f"updated {len(incidents)} incidents in the db to be validated by '{community_leader.community_name}' with notice '{data.notice}'",
+            "message1": f"sent push notifications to {households_messaged}/{len(community_leader.community_members)} members of community: {community_leader.community_name}"
             }
 
 #------------------------------------------------------------------------------------------------
@@ -163,12 +180,104 @@ def create_community_specific_plans(data: CommunityLeaderPlanCreationRequest):
             "message": f"created community plans for {community_leader.community_name}"
             }
 
-#TODO: this
+#-------------------------------------------------------------------------------------
 
 class CommunityLeaderPublishNotificationRequest(BaseModel):
     id: int
     body: str
 
+#sends push notifications
 @router.post("/community-leader/publish-notification")
 def send_a_notification_to_all_community_members(data: CommunityLeaderPublishNotificationRequest):
-    pass
+    with get_session() as session:
+
+        #verify id exists
+        verification = verify_person_creds(data.id)
+        if verification is not True:
+            raise HTTPException(status_code=401, detail= verification)
+
+        #check community leader exists
+        community_leader = session.get(models.Community_Leader, data.id)
+        if community_leader is None:
+            raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
+    
+        #now that we know everything is ok, we can send a firebase message to everyone in the community
+        #retrieve all the fcm tokens
+        person_rows = db.get_rows_from_ids(session, models.People, community_leader.community_members)
+        sent_count = 0
+        send_data = {"type": "Community Announcement", "Community Leader": community_leader.first_name, "Message": data.body}             #this dict has to be all strings 
+        message = f"New community notification for {community_leader.community_name}!"
+        for person in person_rows:
+            success = firebase.send_firebase_notification(f"New Community Notification", message, person.fcm_token, send_data)
+            if success:
+                sent_count += 1
+        return {
+            "status": "ok",
+            "message": f"Sent {sent_count} notifications to community members in '{community_leader.community_name}'"
+            }
+
+#--------------------------------------------------------------------------------------------
+class CommunityLeaderReportValidationRequest(BaseModel):
+    id: int
+    report_id: int
+
+@router.post("/community-leader/validate-report")
+def validate_an_emergency_report_for_a_community(data: CommunityLeaderReportValidationRequest):
+    with get_session() as session:
+        
+        #verify id exists
+        verification = verify_person_creds(data.id)
+        if verification is not True:
+            raise HTTPException(status_code=401, detail= verification)
+
+        #check community leader exists
+        community_leader = session.get(models.Community_Leader, data.id)
+        if community_leader is None:
+            raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
+
+        #check report id exists
+        report = session.get(models.Emergency_Report, data.report_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail= "Report id does not exist in db records")
+
+        #now finally, push notifications to all households
+        message = f"{report.title} has been validated by {community_leader.first_name}!"
+        send_data = {"type": "Emergency Report Validated", "report id": str(report.id)} 
+        
+        household_sent_count = 0
+        for id in community_leader.community_members: 
+            person = session.get(models.People, id)
+            sent = firebase.send_firebase_notification(f"New Emergency Report Validation", message, person.fcm_token, send_data)
+            if sent:
+                household_sent_count += 1
+        
+        community_members = len(community_leader.community_members)
+        return {
+            "status": "ok",
+            "message" : f"Sent validated emergency report '{report.title}' to {household_sent_count}/{community_members} community members in community '{community_leader.community_name}'"
+        }
+
+#-------------------------------------------------------------------------------
+class CommunityLeaderRefreshPageRequest(BaseModel):
+    id: int
+
+@router.post("/community-leader/refresh-dashboard")
+def refresh_stale_data_on_the_dashboard(data: CommunityLeaderRefreshPageRequest):
+    with get_session() as session:
+
+        #verify id exists
+        verification = verify_person_creds(data.id)
+        if verification is not True:
+            raise HTTPException(status_code=401, detail= verification)
+
+        #check community leader exists
+        community_leader = session.get(models.Community_Leader, data.id)
+        if community_leader is None:
+            raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
+
+        #now that we know that the community and community leader exist, we can return any data we want from the server 
+        return {
+            "status": "ok",
+            "message": "pulled necessary data for community leader dashboard from servers",
+            "data": {} 
+        }      

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-//import '../../widgets/household/household_header.dart';
-import '../../widgets/dynamic_dashboard_header.dart';
+
+import '../../services/database_helper.dart';
 import '../../widgets/active_incidents_card.dart';
-import '../../widgets/household/household_checklist.dart';
-import '../login_page.dart';
 import '../../widgets/report_dialog.dart';
+import '../login_page.dart';
+import 'components/marquee_banner.dart';
 
 class HouseholdDashboard extends StatefulWidget {
   const HouseholdDashboard({super.key});
@@ -14,91 +14,128 @@ class HouseholdDashboard extends StatefulWidget {
 }
 
 class _HouseholdDashboardState extends State<HouseholdDashboard> {
-  // Configured with type int? to allow no sidebar selections by default
-  int? _sideIndex; 
+  int _bottomIndex =
+      0; // Standard bottom navigation item controller index tracking
+  final String _announcementText =
+      'No active announcements at the moment. Check back later for critical community updates.';
 
-  Widget _railIcon({
-    required IconData icon,
-    required IconData selectedIcon,
-    required String tooltip,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: tooltip,
-      child: InkResponse(
-        onTap: onTap,
-        radius: 24,
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: selected ? scheme.secondaryContainer : Colors.transparent,
-          ),
-          child: Icon(
-            selected ? selectedIcon : icon,
-            size: 22,
-            color: selected
-                ? scheme.onSecondaryContainer
-                : scheme.onSurfaceVariant,
+  Future<Map<String, String>> _loadProfile() async {
+    final lastName =
+        await DatabaseHelper.instance.getConfig('household_last_name') ??
+        'Unknown Household';
+    return {'last_name': lastName};
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF14171A),
+      appBar: AppBar(
+        title: const Text(''),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+      ),
+      body: FutureBuilder<Map<String, String>>(
+        future: _loadProfile(),
+        builder: (context, snapshot) {
+          final lastName = snapshot.data?['last_name'] ?? 'Unknown Household';
+
+          return SingleChildScrollView(
+            // FIXED: Removed the left sidebar padding constraint completely!
+            // All content rows now scale to full screen layout width safely.
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Profile Text Header Block
+                Text(
+                  'Household $lastName',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Full-Width Interactive Marquee Ticker
+                _buildTickerTape(),
+                const SizedBox(height: 24),
+
+                // Active Target Screen Component Display Frame
+                _buildMainViewContent(),
+                const SizedBox(height: 24),
+              ],
+            ),
+          );
+        },
+      ),
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  Widget _buildTickerTape() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2225),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: InkWell(
+        onTap: () => _showAnnouncementDetails(),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+          child: Row(
+            children: [
+              const Icon(Icons.campaign, color: Color(0xFF4DB6AC), size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: MarqueeBanner(text: _announcementText)),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _sidePill() {
-    final theme = Theme.of(context);
-    final barColor = theme.navigationBarTheme.backgroundColor ??
-        theme.colorScheme.surfaceContainer;
+  Widget _buildMainViewContent() {
+    // Switch state layout frames based on your bottom navigation choices
+    if (_bottomIndex == 1)
+      return _buildPlaceholderCard('Checklist Content Log', Icons.checklist);
+    if (_bottomIndex == 2)
+      return _buildPlaceholderCard(
+        'Community Action Plan Matrix',
+        Icons.groups,
+      );
 
-    return Container(
-      margin: const EdgeInsets.only(left: 4),
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      decoration: BoxDecoration(
-        color: barColor.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _railIcon(
-            icon: Icons.checklist_outlined,
-            selectedIcon: Icons.checklist,
-            tooltip: 'Checklist',
-            selected: _sideIndex == 0,
-            onTap: () {
-              setState(() {
-                _sideIndex = (_sideIndex == 0) ? null : 0;
-              });
-            },
+    // Default Index (0) -> Main Feed Overview Card Stack
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Theme(
+          data: Theme.of(context).copyWith(
+            textTheme: Theme.of(context).textTheme.apply(fontSizeFactor: 0.88),
           ),
-          const SizedBox(height: 12),
-          _railIcon(
-            icon: Icons.groups_outlined,
-            selectedIcon: Icons.groups,
-            tooltip: 'Community Plan',
-            selected: _sideIndex == 1,
-            onTap: () {
-              setState(() {
-                _sideIndex = (_sideIndex == 1) ? null : 1;
-              });
-            },
-          ),
-        ],
-      ),
+          child: ActiveIncidentsCard(),
+        ),
+        const SizedBox(height: 16),
+        _buildPlaceholderCard(
+          'Community Reports Feed',
+          Icons.assignment_turned_in_outlined,
+        ),
+      ],
     );
   }
 
-  Widget _buildEmptyPlaceholderCard(String title, IconData icon) {
+  Widget _buildPlaceholderCard(String title, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF14171A), 
+        color: const Color(0xFF14171A),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10, width: 1),
+        border: Border.all(color: Colors.white10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,12 +150,11 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
-                  letterSpacing: 0.5,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           const Center(
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 24.0),
@@ -173,56 +209,88 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                 ),
                 const SizedBox(height: 16),
               ],
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _sidePill(),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Theme(
-        data: Theme.of(context).copyWith(
-          navigationBarTheme: _sideIndex != null
-              ? const NavigationBarThemeData(
-                  indicatorColor: Colors.transparent, 
-                )
-              : Theme.of(context).navigationBarTheme,
+  Widget _buildBottomNav() {
+    return NavigationBar(
+      selectedIndex: _bottomIndex,
+      onDestinationSelected: (idx) {
+        if (idx == 3) {
+          // Trigger the 3-page structural report dialog modal overlay pattern
+          showReportDialog(context);
+        } else if (idx == 4) {
+          // Route direct page navigation context straight over the account profile portal
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+          );
+        } else {
+          setState(() => _bottomIndex = idx);
+        }
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Home',
         ),
-        child: NavigationBar(
-          selectedIndex: 0, 
-          onDestinationSelected: (index) {
-            if (index == 0) {
-              setState(() => _sideIndex = null); 
-            } else if (index == 1) {
-              showReportDialog(context);
-            } else if (index == 2) {
-              
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginPage()),
-              );
-            }
-          },
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.crisis_alert_outlined),
-              selectedIcon: Icon(Icons.crisis_alert),
-              label: 'Incidents',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.report_outlined, color: Colors.redAccent, size: 34),
-              selectedIcon: Icon(Icons.report, color: Colors.redAccent, size: 34),
-              label: 'Report',
-            ),
-            // FIXED: Replaced "Contacts" layout destination item properties with "Profile"
-            NavigationDestination(
-              icon: Icon(Icons.account_circle_outlined),
-              selectedIcon: Icon(Icons.account_circle),
-              label: 'Profile',
+        NavigationDestination(
+          icon: Icon(Icons.checklist_outlined),
+          selectedIcon: Icon(Icons.checklist),
+          label: 'Checklist',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.groups_outlined),
+          selectedIcon: Icon(Icons.groups),
+          label: 'Plan',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.report_outlined, color: Colors.redAccent),
+          selectedIcon: Icon(Icons.report, color: Colors.redAccent),
+          label: 'Report',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.account_circle_outlined),
+          selectedIcon: Icon(Icons.account_circle),
+          label: 'Profile',
+        ),
+      ],
+    );
+  }
+
+  void _showAnnouncementDetails() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF14171A),
+        title: const Row(
+          children: [
+            Icon(Icons.campaign, color: Color(0xFF4DB6AC)),
+            SizedBox(width: 8),
+            Text(
+              'Community Announcement',
+              style: TextStyle(color: Colors.white, fontSize: 18),
             ),
           ],
         ),
+        content: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white10,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            _announcementText,
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Close',
+              style: TextStyle(color: Color(0xFF4DB6AC)),
+            ),
+          ),
+        ],
       ),
     );
   }

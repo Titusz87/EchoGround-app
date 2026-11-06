@@ -33,11 +33,10 @@ class AuthService {
       'backend_person_id',
     );
 
-    // FIXED: Automatic background registration trigger loop has been completely removed!
     // If it's missing, we let it stay null so the app doesn't force a setup handshake on boot.
     if (savedPersonId == null || savedPersonId.isEmpty) {
       print(
-        "ℹ️ Local identity profile empty. Preserving Guest Mode profile canvas...",
+        "Local identity profile empty. Preserving Guest Mode profile canvas...",
       );
       return null;
     }
@@ -149,6 +148,48 @@ class AuthService {
 
           // Broadcast database sync event instantly to let dynamic header update its view state loop
           DatabaseHelper.instance.syncNotifier.value++;
+        } else {
+          // --- FIXED COMMUNITY LEADER LOGIN PERSISTENCE HANDSHAKE ---
+          final String message = responseData['message']?.toString() ?? '';
+          String loggedLeaderName = 'Unknown';
+
+          if (message.contains("'")) {
+            final List<String> parts = message.split("'");
+            if (parts.length > 1) {
+              loggedLeaderName =
+                  parts[1]; // Safely isolates the leader name 'Titus'
+            }
+          }
+
+          // FIX: Read the explicit 'community_name' key if sent by backend,
+          // or retain your active session community without overwriting it with the person name string
+          String? loggedCommunity =
+              responseData['community_name'] ?? responseData['community'];
+
+          if (loggedCommunity == null || loggedCommunity.isEmpty) {
+            // Re-read existing cache to prevent overriding it with a bad value
+            loggedCommunity = await DatabaseHelper.instance.getConfig(
+              'auth_community_name',
+            );
+          }
+
+          // Absolute fallback if cache was wiped completely clear
+          if (loggedCommunity == null || loggedCommunity.isEmpty) {
+            loggedCommunity = 'Bruhyna';
+          }
+
+          await DatabaseHelper.instance.saveConfig(
+            'auth_community_name',
+            loggedCommunity,
+          );
+          await DatabaseHelper.instance.saveConfig(
+            'auth_leader_name',
+            loggedLeaderName,
+          );
+
+          print(
+            'LEADER RE-LOGIN COMPLETE: Retained Community "$loggedCommunity" and noted Leader "$loggedLeaderName".',
+          );
         }
 
         return true;
@@ -183,71 +224,110 @@ class AuthService {
     return null;
   }
 
-  /// Handles Registration Requests for both Roles dynamically and permanently stores account metadata locally on creation
+  /// Handles Registration Requests dynamically.
   static Future<bool> register({
     required int id,
     required String password,
     required String phone,
-    required String secondaryName, // Represents last_name for household, or first_name for leader
-    required String communityName, // Exclusive parameter used by leaders
+    required String secondaryName,
+    required String communityName,
     required int count,
     required bool isLeader,
   }) async {
-    final String subPath = isLeader
-        ? 'community-leader/create'
-        : 'household/create';
-    final url = Uri.parse('$_backendBaseUrl/$subPath');
-
-    // Dynamically build the exact payload body expected by swagger models
-    final Map<String, dynamic> requestBody = isLeader
-        ? {
+    try {
+      if (isLeader) {
+        // --- COMMUNITY LEADER ACCOUNT ROUTE FLOW ---
+        final url = Uri.parse('$_backendBaseUrl/community-leader/create');
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
             'id': id,
             'first_name': secondaryName,
             'phone': phone,
             'password': password,
             'community_name': communityName,
-          }
-        : {
+          }),
+        );
+
+        print(
+          'Leader Create Status: ${response.statusCode} | Body: ${response.body}',
+        );
+
+        //Persist configuration metadata state locally to SQLite immediately upon successful response codes
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          await DatabaseHelper.instance.saveConfig(
+            'auth_community_name',
+            communityName,
+          );
+          await DatabaseHelper.instance.saveConfig(
+            'community_households_count',
+            '1',
+          );
+          await DatabaseHelper.instance.saveConfig(
+            'community_members_count',
+            '1',
+          );
+          print(
+            'LEADER REGISTRATION PERSISTED: Successfully saved Community "$communityName" to database config keys.',
+          );
+        }
+
+        return response.statusCode == 200 || response.statusCode == 201;
+      } else {
+        // --- HOUSEHOLD ACCOUNT FLOW (TWO-STEP CHAIN) ---
+
+        // STEP 1: Create the base household profile entry row
+        final createUrl = Uri.parse('$_backendBaseUrl/household/create');
+        final createResponse = await http.post(
+          createUrl,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
             'id': id,
             'last_name': secondaryName,
             'phone': phone,
             'count': count,
-            'community_name': communityName,
             'password': password,
-          };
+          }),
+        );
 
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(requestBody),
-      );
+        print(
+          'Step 1 (Household Create) Status: ${createResponse.statusCode} | Body: ${createResponse.body}',
+        );
 
-      print(
-        'Auth Register Status: ${response.statusCode} | Body: ${response.body}',
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-
-        if (responseData['status'] == 'failure' ||
-            responseData['status'] == 'error') {
+        if (createResponse.statusCode != 200 &&
+            createResponse.statusCode != 201) {
+          print('Step 1 Failed: Profile creation rejected.');
           return false;
         }
 
-        // PERSIST NEW ACCOUNT CONTEXT DETAILS STRAIGHT TO SQLITE DEVICE CONFIG TABLE
-        if (!isLeader) {
+        final Map<String, dynamic> createData = jsonDecode(createResponse.body);
+        if (createData['status'] == 'failure' ||
+            createData['status'] == 'error') {
+          return false;
+        }
+
+        // STEP 2: Immediately execute a PATCH operation to attach this profile to a community
+        final registerUrl = Uri.parse('$_backendBaseUrl/household/register');
+        final registerResponse = await http.patch(
+          registerUrl,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'id': id, 'community_name': communityName}),
+        );
+
+        print(
+          'Step 2 (Household Community Link) Status: ${registerResponse.statusCode} | Body: ${registerResponse.body}',
+        );
+
+        if (registerResponse.statusCode == 200 ||
+            registerResponse.statusCode == 201) {
           String savedLastName = secondaryName;
-          final String message = responseData['message']?.toString() ?? '';
+          final String message = createData['message']?.toString() ?? '';
 
           if (message.contains('last name ')) {
-            savedLastName = message
-                .split('last name ')
-                .last
-                .trim(); // Pulls the true server last name string
+            savedLastName = message.split('last name ').last.trim();
           }
 
-          // Use the exact integer payload argument provided by the live text input field controller
           await DatabaseHelper.instance.saveConfig(
             'household_last_name',
             savedLastName,
@@ -259,18 +339,17 @@ class AuthService {
           await _saveHouseholdProfile(id, family: secondaryName, community: communityName, count: count);
 
           print(
-            'LOCAL STORAGE SYNCED ON CREATION: Saved Last Name ($savedLastName) and count ($count) permanently to SQLite.',
+            'HOUSEHOLD REGISTRATION PERSISTED: Linked to ($communityName) successfully.',
           );
 
-          // BROADCAST TRIGGER LAYER: Alert dynamic header that raw DB fields have populated
           DatabaseHelper.instance.syncNotifier.value++;
+          return true;
         }
-
-        return true;
+        print('Step 2 Failed: Community relationship assignment rejected.');
+        return false;
       }
-      return false;
     } catch (e) {
-      print('Registration networking thread failed: $e');
+      print('Registration pipeline processing thread failure: $e');
       return false;
     }
   }

@@ -121,7 +121,7 @@ class SystemSettings(Base):
 
     #db functionality
     write_to_db: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    delete_all_tables: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    delete_all_tables: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     fcm_token_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False) #track whether users need their fcm token to be correct when doing stuff like logging in
 
     #controls polling behavior
@@ -129,8 +129,9 @@ class SystemSettings(Base):
     poll_on_startup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     auto_poll_interval: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
 
-    #run a firebase test on startup
-    test_firebase_notification_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    #firebase stuff
+    test_firebase_notification_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False) #run a firebase test on startup
+    print_firebase_notification_sent: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False) #print when the server sends a firebase notification
 
     #variables for incident sync
     stale_incident_time_days: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
