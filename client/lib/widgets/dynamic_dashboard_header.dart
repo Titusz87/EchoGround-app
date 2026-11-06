@@ -4,7 +4,9 @@ import 'dart:convert';
 import '../services/database_helper.dart'; 
 
 class DynamicDashboardHeader extends StatefulWidget {
-  const DynamicDashboardHeader({super.key});
+  const DynamicDashboardHeader({super.key, this.locationOnly = false});
+
+  final bool locationOnly;
 
   @override
   State<DynamicDashboardHeader> createState() => _DynamicDashboardHeaderState();
@@ -21,7 +23,9 @@ class _DynamicDashboardHeaderState extends State<DynamicDashboardHeader> {
   @override
   void initState() {
     super.initState();
-    _loadSavedDataOnStartup();
+    _loadSavedDataOnStartup().then((_) {
+      if (mounted && widget.locationOnly) _fetchRealLocation();
+    });
     
     // ADDED LISTENER: Re-reads database profile rows automatically whenever syncNotifier ticks up!
     DatabaseHelper.instance.syncNotifier.addListener(_loadSavedDataOnStartup);
@@ -169,6 +173,22 @@ class _DynamicDashboardHeaderState extends State<DynamicDashboardHeader> {
     if (_isLoadingAuth) return const SizedBox(height: 60);
 
     final theme = Theme.of(context);
+    if (widget.locationOnly) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.location_on, size: 16, color: theme.colorScheme.primary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              _locationText,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: Colors.white70),
+            ),
+          ),
+        ],
+      );
+    }
     final bool isUserLoggedIn = _lastName != null && _lastName!.isNotEmpty;
 
     return Container(

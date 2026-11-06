@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../services/database_helper.dart';
 import '../../widgets/embedded_street_map.dart';
+import '../../widgets/dynamic_dashboard_header.dart';
 import '../login_page.dart';
 import '../../widgets/report_dialog.dart';
+import '../../widgets/active_incidents_card.dart';
 
 import 'package:maplibre_gl/maplibre_gl.dart';
 
@@ -15,8 +17,6 @@ class GuestModeDashboard extends StatefulWidget {
 }
 
 class _GuestModeDashboardState extends State<GuestModeDashboard> {
-  int _bottomIndex = 0;
-
   /// Extracts active memory values populated by tracking service loops
   LatLng? _getLiveCacheCoordinates() {
     final double? lat = DatabaseHelper.instance.cachedLat;
@@ -59,34 +59,14 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
                 ),
                 const SizedBox(height: 12),
 
-                // Centered GPS Location Row Layout
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.location_on, color: Color(0xFF4DB6AC), size: 16),
-                    SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        'Adelaide, South Australia · Kaurna Pangkarra',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white60, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
+                const DynamicDashboardHeader(locationOnly: true),
                 const SizedBox(height: 24),
 
-                _buildActiveIncidentsCard(),
+                const ActiveIncidentsCard(),
                 const SizedBox(height: 16),
 
-                // Map placement area injections
-                if (_bottomIndex == 0) ...[
-                  EmbeddedStreetMap(dynamicCenter: liveLocation),
-                  const SizedBox(height: 24),
-                ] else if (_bottomIndex == 1) ...[
-                  EmbeddedStreetMap(dynamicCenter: liveLocation, height: 440),
-                  const SizedBox(height: 24),
-                ],
+                EmbeddedStreetMap(dynamicCenter: liveLocation),
+                const SizedBox(height: 24),
               ],
             ),
           );
@@ -96,96 +76,17 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
     );
   }
 
-  Widget _buildActiveIncidentsCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF14171A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10, width: 1),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (index) {
-          if (index == 1) {
-            showReportDialog(context);
-          } else if (index == 2) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const LoginPage(),
-              ),
-            );
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.crisis_alert_outlined),
-            selectedIcon: Icon(Icons.crisis_alert),
-            label: 'Incidents',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.report_outlined, color: Colors.redAccent, size: 34),
-            selectedIcon: Icon(Icons.report, color: Colors.redAccent, size: 34),
-            label: 'Report',
-          ),
-          // FIXED: Replaced "Contacts" layout destination item properties with "Profile"
-          NavigationDestination(
-            icon: Icon(Icons.account_circle_outlined),
-            selectedIcon: Icon(Icons.account_circle),
-            label: 'Profile',
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.orangeAccent,
-                size: 20,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'ACTIVE INCIDENTS',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 4),
-          Text(
-            '0 active incidents',
-            style: TextStyle(color: Colors.white38, fontSize: 12),
-          ),
-          SizedBox(height: 24),
-          Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
-              child: Text(
-                'No current incidents reported.',
-                style: TextStyle(color: Colors.white38, fontSize: 13),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBottomNav() {
     return NavigationBar(
-      selectedIndex: _bottomIndex > 1 ? 0 : _bottomIndex,
+      selectedIndex: 0,
       onDestinationSelected: (index) {
-        if (index == 2) {
+        if (index == 1) {
+          showReportDialog(context);
+        } else if (index == 2) {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const LoginPage()),
           );
-        } else {
-          setState(() => _bottomIndex = index);
         }
       },
       destinations: const [
@@ -195,9 +96,9 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
           label: 'Home',
         ),
         NavigationDestination(
-          icon: Icon(Icons.map_outlined),
-          selectedIcon: Icon(Icons.map),
-          label: 'Map',
+          icon: Icon(Icons.report_outlined, color: Colors.redAccent),
+          selectedIcon: Icon(Icons.report, color: Colors.redAccent),
+          label: 'Report',
         ),
         NavigationDestination(
           icon: Icon(Icons.account_circle_outlined),

@@ -7,7 +7,6 @@ import '../../widgets/community_leader/community_plan_editor.dart';
 
 
 import '../../services/database_helper.dart';
-import '../login_page.dart';
 import 'components/leader_reports_log.dart';
 
 class LeaderDashboard extends StatefulWidget {
@@ -17,7 +16,7 @@ class LeaderDashboard extends StatefulWidget {
 }
 
 class _LeaderDashboardState extends State<LeaderDashboard> {
-  int? _sideIndex;
+  int? _sideIndex = 1;
   final _planDraft = CommunityPlanDraft();
   List<PlanSection> get _sections => [
     PlanSection('Notifications', 'Community notices and updates for linked households.', Icons.notifications_outlined),
@@ -26,25 +25,6 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     PlanSection('Privacy & security', 'Privacy and security options will be available in a future release.', Icons.privacy_tip_outlined),
   ];
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Community Leader Dashboard'), centerTitle: true),
-    body: DarkPlanLayout(
-      sections: _sections,
-      selectedIndex: _sideIndex,
-      onSelected: (index) => setState(() => _sideIndex = index),
-      incidents: const ActiveIncidentsCard(),
-    ),
-    bottomNavigationBar: NavigationBar(
-      selectedIndex: 0,
-      onDestinationSelected: (index) {
-        if (index == 0) {
-          setState(() => _sideIndex = null);
-        } else if (index == 1) {
-          showReportDialog(context);
-        } else if (index == 2) {
-
-class _LeaderDashboardState extends State<LeaderDashboard> {
   int _bottomIndex =
       0; // Standard bottom navigation item controller index tracking
 
@@ -98,6 +78,14 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
           final households = snapshot.data?['households'] ?? '1';
           final members = snapshot.data?['members'] ?? '1';
 
+          if (_bottomIndex == 1) {
+            return DarkPlanLayout(
+              sections: _sections,
+              selectedIndex: _sideIndex,
+              onSelected: (index) => setState(() => _sideIndex = index),
+              incidents: const ActiveIncidentsCard(),
+            );
+          }
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Column(
@@ -137,17 +125,11 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   }
 
   Widget _buildDynamicBodyContent() {
-    if (_bottomIndex == 1)
-      return _buildPlaceholderCard(
-        'Community Action Plan Matrix',
-        Icons.assignment,
-      );
-
     // Default Index (0) -> Core Overview Panels Stack Card views
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildActiveIncidentsPlaceholder(),
+        const ActiveIncidentsCard(),
         const SizedBox(height: 16),
         LeaderReportsLog(
           reports: _reports,
@@ -155,84 +137,6 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
               setState(() => _reports[idx]['status'] = status),
         ),
       ],
-    );
-  }
-
-  Widget _buildActiveIncidentsPlaceholder() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF14171A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.orangeAccent,
-                size: 20,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'ACTIVE INCIDENTS',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 32),
-          Center(
-            child: Text(
-              'No current incidents reported.',
-              style: TextStyle(color: Colors.white38, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlaceholderCard(String title, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF14171A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: const Color(0xFF4DB6AC), size: 20),
-              const SizedBox(width: 8),
-              Text(
-                title.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Center(
-            child: Text(
-              'No content active in this component panel context.',
-              style: TextStyle(color: Colors.white38, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -249,28 +153,8 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
             context,
             MaterialPageRoute(builder: (context) => const LoginPage()),
           );
-        }
-      },
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.crisis_alert_outlined),
-              selectedIcon: Icon(Icons.crisis_alert),
-              label: 'Incidents',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.report_outlined, color: Colors.redAccent, size: 34),
-              selectedIcon: Icon(Icons.report, color: Colors.redAccent, size: 34),
-              label: 'Report',
-            ),
-            // FIXED: Replaced "Contacts" layout destination item properties with "Profile"
-            NavigationDestination(
-              icon: Icon(Icons.account_circle_outlined),
-              selectedIcon: Icon(Icons.account_circle),
-              label: 'Profile',
-            ),
-          ],
-    ),
-  );
+        } else if (idx == 4) {
+          showReportDialog(context);
         } else {
           setState(() => _bottomIndex = idx);
         }
@@ -295,6 +179,11 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
           icon: Icon(Icons.account_circle_outlined),
           selectedIcon: Icon(Icons.account_circle),
           label: 'Profile',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.report_outlined, color: Colors.redAccent),
+          selectedIcon: Icon(Icons.report, color: Colors.redAccent),
+          label: 'Report',
         ),
       ],
     );

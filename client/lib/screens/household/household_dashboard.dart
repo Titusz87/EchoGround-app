@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/database_helper.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/report_dialog.dart';
+import '../../widgets/household/household_checklist.dart';
 import '../login_page.dart';
 import 'components/marquee_banner.dart';
 
@@ -102,8 +103,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
 
   Widget _buildMainViewContent() {
     // Switch state layout frames based on your bottom navigation choices
-    if (_bottomIndex == 1)
-      return _buildPlaceholderCard('Checklist Content Log', Icons.checklist);
+    if (_bottomIndex == 1) return const HouseholdChecklist();
     if (_bottomIndex == 2)
       return _buildPlaceholderCard(
         'Community Action Plan Matrix',
@@ -169,46 +169,6 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Household Dashboard'),
-        centerTitle: true,
-      ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const DynamicDashboardHeader(),
-                const SizedBox(height: 20),
-                
-                Padding(
-                  padding: const EdgeInsets.only(left: 44),
-                  child: Builder(
-                    builder: (context) {
-                      if (_sideIndex == 0) {
-                        return const HouseholdChecklist();
-                      }
-                      if (_sideIndex == 1) {
-                        return _buildEmptyPlaceholderCard('Community Plan Details', Icons.groups);
-                      }
-                      
-                      final base = Theme.of(context).textTheme;
-                      return Theme(
-                        data: Theme.of(context).copyWith(
-                          textTheme: base.apply(fontSizeFactor: 0.88),
-                        ),
-                        child: const ActiveIncidentsCard(),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
   Widget _buildBottomNav() {
     return NavigationBar(
       selectedIndex: _bottomIndex,
