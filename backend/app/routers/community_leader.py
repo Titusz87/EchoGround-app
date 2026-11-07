@@ -173,7 +173,18 @@ def create_community_specific_plans(data: CommunityLeaderPlanCreationRequest):
         if community_leader is None:
             raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
 
-        #now, we can submit the plans 
+        #first, search to see if this community leader has already made plans 
+        community_plans = db.get_db_rows_by_all_fields(session, models.Community_Posts, {"community_leader_id": community_leader.id, "post_type": "plans"})
+        if community_plans:
+            community_plans = community_plans[0] #because this fn returns a list. this list shouldn't be able to grow beyond length 1 due to this logic
+            community_plans.data = data.body
+            session.commit()
+            return {
+                "status": "ok",
+                "message": f"updated community plans for {community_leader.community_name}"
+                }
+
+        #create new plans instead of updating them 
         create_community_plans(community_leader.id, community_leader.community_name, data.body)
         return {
             "status": "ok",
