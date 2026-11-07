@@ -204,16 +204,26 @@ def refresh_stale_data_on_the_dashboard(data: HouseholdRefreshPageRequest):
         if household.community_leader_id is None:
             raise HTTPException(status_code=403, detail= f"household '{household.last_name}' does not belong to a community")
 
-        #now, we can pull any data from the server that we want:
+        #check the community leader exists
         community_leader = session.get(models.Community_Leader, household.community_leader_id)
         if community_leader is None:
             raise HTTPException(status_code=404, detail= f"community leader value in household was incorrectly set")
 
+        #------------now, we can pull any data from the server that we want:----------------------
+
+        #retrieve number of community members
         members_count = 0
         for id in community_leader.community_members:
             member_household = session.get(models.Household, id)
             if member_household is not None:
                 members_count += member_household.count
+
+        #retrieve community plans. the below fn returns a list  
+        community_plans_rows = db.get_db_rows_by_all_fields(session, models.Community_Posts, {"community_leader_id": community_leader.id, "post_type": "plans"})
+        community_plans = ""
+        if community_plans_rows:
+            community_plans = community_plans_rows[0]
+            community_plans = community_plans.data
         
         return {
             "status": "ok",
@@ -221,6 +231,7 @@ def refresh_stale_data_on_the_dashboard(data: HouseholdRefreshPageRequest):
             "data": {"community name": community_leader.community_name,
                      "community leader name": community_leader.first_name,
                      "community households count": len(community_leader.community_members or []),
-                     "community members count": members_count
+                     "community members count": members_count,
+                     "community plans": community_plans
                      } 
         }

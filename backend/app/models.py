@@ -82,12 +82,6 @@ class Household(Base):
 
 #------------------profile classes------------------------------------------------------------
 
-#this table store the community info that is created by community leaders
-#NOTE this model is probably not needed, as the community leader will have 1 community, and store member ids in a list
-# class Community_Profile(Base):
-#     __tablename__ = "community_profiles"
-#     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-
 #we need to remember which incidents affect which people
 class People_Incident(Base):
     __tablename__ = "people_incidents"
@@ -105,6 +99,7 @@ class Emergency_Report(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False) #use text field because it can be longer 
     created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False) #we don't need to ask for this value
 
+#generic class to store data like the 'community plans'
 class Community_Posts(Base):
     __tablename__ = "community_posts"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
