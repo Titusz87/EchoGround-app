@@ -80,7 +80,7 @@ class _MyAppState extends State<MyApp> {
           brightness: Brightness.dark,
         ),
       ),
-      //  Swapped out GuestModeDashboard() to place the gatekeeper in control on system boots!
+      // gatekeeper on system boots
       home: Builder(
         builder: (context) {
           // Fire off the automated location tracking loops safely inside a layout builder context shell
