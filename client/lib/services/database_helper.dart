@@ -11,6 +11,9 @@ class DatabaseHelper {
   // Added reactive synchronisation notifier layer for real-time UI triggering
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
 
+  // 🎯 THE WEB STATE BRIDGE: Global memory repo to sync threads if web workers split storage files
+  static final List<Map<String, dynamic>> crossThreadMemoryBuffer = [];
+
   // In-memory cache for coordinates
   double? cachedLat;
   double? cachedLng;
@@ -28,8 +31,7 @@ class DatabaseHelper {
       databaseFactory = databaseFactoryFfiWeb;
       return await openDatabase(
         filePath,
-        version:
-            3, //UPGRADED SCHEMA to bypass old browser IndexedDB locks cleanly
+        version: 3,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
       );
@@ -39,7 +41,7 @@ class DatabaseHelper {
       final path = join(dbPath, filePath);
       return await openDatabase(
         path,
-        version: 3, // UPGRADED SCHEMA for system alignment
+        version: 3,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
       );
@@ -77,7 +79,6 @@ class DatabaseHelper {
     ''');
   }
 
-  // REINFORCED UPGRADE ENGINE: Re-maps schema version branches sequentially
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 3) {
       try {
@@ -107,7 +108,7 @@ class DatabaseHelper {
       return str.isEmpty ? fallback : str;
     }
 
-    // 🛠️ PAYLOAD MAPPING ENGINE: Aligned with backend data columns safely
+    // Standardize incoming parameters to uniform keys
     final Map<String, dynamic> row = {
       'id': sanitizeString(
         dataPayload['id'],
@@ -174,25 +175,51 @@ class DatabaseHelper {
       ),
     };
 
-    try {
-      print("Syncing cleaned dataset entry to local database: ${row['id']}");
+    // 🎯 INJECT STRAIGHT TO SHARED RUNTIME STATIC RAM MEMORY
+    final int existingIdx = crossThreadMemoryBuffer.indexWhere(
+      (element) => element['id'] == row['id'],
+    );
+    if (existingIdx != -1) {
+      crossThreadMemoryBuffer[existingIdx] = row;
+    } else {
+      crossThreadMemoryBuffer.insert(0, row);
+    }
 
+    try {
       await db.insert(
         'notifications',
         row,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-
-      // BROADCAST TRIGGER ACTIVE: Forces live active UI widget components to reload instantly
-      syncNotifier.value++;
     } catch (e) {
       print("Database Write Failure Intercepted Safely: $e");
     }
+
+    // ⚡ ALERT USER INTERFACE: Force dashboard layouts to repaint instantly!
+    syncNotifier.value++;
   }
 
   Future<List<Map<String, dynamic>>> fetchAllNotifications() async {
-    final db = await instance.database;
-    return await db.query('notifications', orderBy: 'created DESC');
+    // 🛠️ WEB THREAD RE-SYNCHRONIZATION:
+    // If running on web and the memory buffer holds data, serve it directly to populate the cards instantly
+    if (kIsWeb && crossThreadMemoryBuffer.isNotEmpty) {
+      return crossThreadMemoryBuffer;
+    }
+
+    try {
+      final db = await instance.database;
+      final List<Map<String, dynamic>> diskResults = await db.query(
+        'notifications',
+        orderBy: 'created DESC',
+      );
+
+      if (kIsWeb && diskResults.isEmpty && crossThreadMemoryBuffer.isNotEmpty) {
+        return crossThreadMemoryBuffer;
+      }
+      return diskResults;
+    } catch (e) {
+      return crossThreadMemoryBuffer;
+    }
   }
 
   Future<void> saveConfig(String key, String value) async {
