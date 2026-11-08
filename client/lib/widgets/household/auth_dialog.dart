@@ -4,8 +4,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+<<<<<<< HEAD
 import '../../../services/auth_service.dart';
 import '../../../services/database_helper.dart';
+=======
+import '../services/auth_service.dart';
+import '../services/database_helper.dart';
+>>>>>>> 2551fc536f64b57a69dcd2098ad1cebf212d0610
 
 /// Shows the login / sign-up dialog for either a household or a community leader.
 /// [onAuthSuccess] is called after a successful login or registration.
