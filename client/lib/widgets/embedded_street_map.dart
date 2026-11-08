@@ -127,7 +127,7 @@ class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
           Icon(
             Icons.public_rounded,
             size: 54,
-            color: const Color(0xFF4DB6AC).withValues(alpha: 0.65),
+            color: const Color(0xFF4DB6AC).withOpacity(0.65),
           ),
           const SizedBox(height: 16),
           const Row(
