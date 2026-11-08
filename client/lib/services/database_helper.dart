@@ -8,11 +8,10 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
+  // Added reactive synchronisation notifier layer for real-time UI triggering
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
 
-  // Global memory cache to bridge the thread isolation gaps on web browsers
-  final List<Map<String, dynamic>> webGlobalMemoryBuffer = [];
-
+  // In-memory cache for coordinates
   double? cachedLat;
   double? cachedLng;
 
@@ -27,12 +26,22 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     if (kIsWeb) {
       databaseFactory = databaseFactoryFfiWeb;
-      return await openDatabase(filePath, version: 1, onCreate: _createDB);
+      return await openDatabase(
+        filePath,
+        version: 2,
+        onCreate: _createDB,
+        onUpgrade: _upgradeDB,
+      );
     } else {
       sqfliteFfiInit();
       final dbPath = await getDatabasesPath();
       final path = join(dbPath, filePath);
-      return await openDatabase(path, version: 1, onCreate: _createDB);
+      return await openDatabase(
+        path,
+        version: 2,
+        onCreate: _createDB,
+        onUpgrade: _upgradeDB,
+      );
     }
   }
 
@@ -52,7 +61,10 @@ class DatabaseHelper {
         description TEXT,
         address TEXT,
         created TEXT,
-        last_modified TEXT
+        last_modified TEXT,
+        validated_by TEXT,
+        last_updated TEXT,
+        test_incident TEXT
       )
     ''');
 
@@ -64,6 +76,27 @@ class DatabaseHelper {
     ''');
   }
 
+  // 🛠️ SEAMLESS SCHEMA EXTENSION: Handles local upgrades gracefully if version ticks up
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      try {
+        await db.execute(
+          "ALTER TABLE notifications ADD COLUMN validated_by TEXT;",
+        );
+      } catch (_) {}
+      try {
+        await db.execute(
+          "ALTER TABLE notifications ADD COLUMN last_updated TEXT;",
+        );
+      } catch (_) {}
+      try {
+        await db.execute(
+          "ALTER TABLE notifications ADD COLUMN test_incident TEXT;",
+        );
+      } catch (_) {}
+    }
+  }
+
   Future<void> insertNotification(Map<String, dynamic> dataPayload) async {
     final db = await instance.database;
 
@@ -73,14 +106,15 @@ class DatabaseHelper {
       return str.isEmpty ? fallback : str;
     }
 
+    // 🛠️ MULTI-KEY PAYLOAD CATCHER: Maps raw values straight to table structures
     final Map<String, dynamic> row = {
       'id': sanitizeString(
-        dataPayload['id'] ?? dataPayload['incident_id'],
+        dataPayload['id'],
         fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
       ),
       'event_type': sanitizeString(
         dataPayload['event_type'],
-        fallback: 'bushfire',
+        fallback: 'General Incident',
       ),
       'status': sanitizeString(dataPayload['status'], fallback: 'Active'),
       'warning_level': sanitizeString(
@@ -88,12 +122,18 @@ class DatabaseHelper {
         fallback: 'Notice',
       ),
       'state': sanitizeString(dataPayload['state'], fallback: 'Active Status'),
-      'latitude': dataPayload['latitude'] != null
+
+      'latitude':
+          dataPayload['latitude'] != null &&
+              dataPayload['latitude'].toString().isNotEmpty
           ? double.tryParse(dataPayload['latitude'].toString())
           : null,
-      'longitude': dataPayload['longitude'] != null
+      'longitude':
+          dataPayload['longitude'] != null &&
+              dataPayload['longitude'].toString().isNotEmpty
           ? double.tryParse(dataPayload['longitude'].toString())
           : null,
+
       'last_evaluated': sanitizeString(
         dataPayload['last_evaluated'],
         fallback: 'Not Evaluated',
@@ -105,12 +145,11 @@ class DatabaseHelper {
       'expires': sanitizeString(dataPayload['expires'], fallback: 'Open Ended'),
       'description': sanitizeString(
         dataPayload['description'],
-        fallback:
-            'Emergency operations are active near local tracking boundaries.',
+        fallback: 'No further details available at this time.',
       ),
       'address': sanitizeString(
         dataPayload['address'],
-        fallback: 'Adelaide Regional Location',
+        fallback: 'Regional Location',
       ),
       'created': sanitizeString(
         dataPayload['created'],
@@ -120,38 +159,39 @@ class DatabaseHelper {
         dataPayload['last_modified'] ?? dataPayload['last_updated'],
         fallback: 'Just Now',
       ),
+
+      // 🛠️ NEW INCOMING COLUMNS INTEGRATED SAFELY
+      'validated_by': sanitizeString(
+        dataPayload['validated_by'],
+        fallback: 'Not Validated',
+      ),
+      'last_updated': sanitizeString(
+        dataPayload['last_updated'],
+        fallback: 'Not Provided',
+      ),
+      'test_incident': sanitizeString(
+        dataPayload['test_incident'],
+        fallback: 'False',
+      ),
     };
 
-    // Ensures data is visible to the main layout thread instantly
-    final int existingIdx = webGlobalMemoryBuffer.indexWhere(
-      (element) => element['id'] == row['id'],
-    );
-    if (existingIdx != -1) {
-      webGlobalMemoryBuffer[existingIdx] = row;
-    } else {
-      webGlobalMemoryBuffer.insert(0, row);
-    }
-
     try {
+      print("Syncing cleaned dataset entry to local database: ${row['id']}");
+
       await db.insert(
         'notifications',
         row,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-    } catch (e) {
-      print("Database write failure bypassed: $e");
-    }
 
-    // Force layouts to repaint
-    syncNotifier.value++;
+      // BROADCAST TRIGGER ACTIVE: Forces reactive active UI screen widgets to reload
+      syncNotifier.value++;
+    } catch (e) {
+      print("Database Write Failure Intercepted Safely: $e");
+    }
   }
 
   Future<List<Map<String, dynamic>>> fetchAllNotifications() async {
-    // If running on web and memory data is populated, return it directly to clear the card status
-    if (kIsWeb && webGlobalMemoryBuffer.isNotEmpty) {
-      return webGlobalMemoryBuffer;
-    }
-
     final db = await instance.database;
     return await db.query('notifications', orderBy: 'created DESC');
   }
