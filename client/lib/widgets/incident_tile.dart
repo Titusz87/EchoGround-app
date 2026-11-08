@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'incident_source.dart';
 
 class IncidentTile extends StatefulWidget {
@@ -26,12 +27,13 @@ class _IncidentTileState extends State<IncidentTile> {
     if (level == null) return '⚪';
     final n = level.toLowerCase().trim();
     if (n.isEmpty || n == 'none') return '⚪';
-    if (n.contains('high') || n.contains('critical') || n.contains('red')) return '🔴';
-    if (n.contains('medium') || n.contains('orange') || n.contains('advice')) return '🟠';
+    if (n.contains('high') || n.contains('critical') || n.contains('red'))
+      return '🔴';
+    if (n.contains('medium') || n.contains('orange') || n.contains('advice'))
+      return '🟠';
     return '🟡';
   }
 
-  // FIXED: Capitalizes only the first letter, avoiding whole-string text doubling glitches
   String _capitalize(String? text) {
     if (text == null) return 'Unknown';
     final trimmed = text.toString().trim();
@@ -40,7 +42,6 @@ class _IncidentTileState extends State<IncidentTile> {
     return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
   }
 
-  // FIXED: Capitalizes only the first letter of each word token slice correctly
   String _prettyKey(String key) {
     if (key.trim().isEmpty) return '';
     return key
@@ -52,12 +53,16 @@ class _IncidentTileState extends State<IncidentTile> {
 
   String get _summaryLine {
     final i = widget.incident;
-    for (final key in ['description', 'address']) {
-      final v = i[key]?.toString().trim() ?? '';
-      if (v.isNotEmpty) return v;
-    }
+    final desc = i['description']?.toString().trim() ?? '';
+    if (desc.isNotEmpty) return desc;
+
+    final addr = i['address']?.toString().trim() ?? '';
+    if (addr.isNotEmpty) return addr;
+
     final statusVal = i['status']?.toString().trim() ?? '';
-    return statusVal.isNotEmpty ? '${_capitalize(statusVal)} · Active' : 'Active Incident';
+    return statusVal.isNotEmpty
+        ? '${_capitalize(statusVal)} · Active'
+        : 'Active Incident';
   }
 
   // ---- UI ------------------------------------------------------------------
@@ -68,9 +73,14 @@ class _IncidentTileState extends State<IncidentTile> {
     final theme = Theme.of(context);
     final source = _source;
 
-    final details = item.entries
-        .where((e) => e.value != null && e.value.toString().trim().isNotEmpty)
-        .toList();
+    // 🛠️ FIXED: Type-safe extraction logic prevents string-to-bool type mapping crashes cleanly
+    final List<MapEntry<String, dynamic>> details = [];
+    for (final entry in item.entries) {
+      final valStr = entry.value?.toString().trim() ?? '';
+      if (valStr.isNotEmpty && entry.key != 'id') {
+        details.add(entry);
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,15 +90,23 @@ class _IncidentTileState extends State<IncidentTile> {
             Expanded(
               child: Text(
                 '${_levelIcon(item['warning_level']?.toString())} '
-                '${_capitalize(item['event_type']?.toString())}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                '${_capitalize(item['event_type']?.toString().replaceAll('_', ' '))}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             _SourceBadge(source: source),
           ],
         ),
         const SizedBox(height: 4),
-        Text(_summaryLine, maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(
+          _summaryLine,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Colors.white70),
+        ),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
@@ -96,9 +114,15 @@ class _IncidentTileState extends State<IncidentTile> {
               padding: EdgeInsets.zero,
               minimumSize: const Size(0, 32),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: const Color(
+                0xFF4DB6AC,
+              ), // Premium teal action highlights
             ),
             onPressed: () => setState(() => _expanded = !_expanded),
-            icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 18),
+            icon: Icon(
+              _expanded ? Icons.expand_less : Icons.expand_more,
+              size: 18,
+            ),
             label: Text(_expanded ? 'Hide details' : 'See details'),
           ),
         ),
@@ -111,8 +135,9 @@ class _IncidentTileState extends State<IncidentTile> {
                   margin: const EdgeInsets.only(top: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    color: Colors.white.withValues(alpha: 0.02),
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white10),
                   ),
                   child: Column(
                     children: [
@@ -126,13 +151,19 @@ class _IncidentTileState extends State<IncidentTile> {
                                 width: 130,
                                 child: Text(
                                   _prettyKey(e.key),
-                                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ),
                               Expanded(
                                 child: SelectableText(
                                   e.value.toString(),
-                                  style: const TextStyle(fontSize: 13),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.white70,
+                                  ),
                                 ),
                               ),
                             ],
@@ -179,7 +210,7 @@ class _SourceBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: badgeColor.withValues(alpha: 0.2),
+        color: badgeColor.withValues(alpha: 0.15),
         border: Border.all(color: badgeColor, width: 1),
         borderRadius: BorderRadius.circular(4),
       ),
