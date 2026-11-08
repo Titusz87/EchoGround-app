@@ -50005,40 +50005,48 @@ return A.o(a.a1H("      CREATE TABLE device_config (\n        key TEXT PRIMARY K
 case 3:return A.u(null,r)}})
 return A.v($async$wc,r)},
 uP(a){return this.aBR(a)},
-aBR(a6){var s=0,r=A.w(t.H),q=1,p=[],o=this,n,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2,a3,a4,a5
-var $async$uP=A.x(function(a7,a8){if(a7===1){p.push(a8)
+aBR(a7){var s=0,r=A.w(t.H),q=1,p=[],o=this,n,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2,a3,a4,a5,a6
+var $async$uP=A.x(function(a8,a9){if(a8===1){p.push(a9)
 s=q}for(;;)switch(s){case 0:s=2
 return A.o($.eh().gno(),$async$uP)
-case 2:l=a8
-k=new A.a8G()
-j=k.$2$fallback(a6.h(0,"id"),"unknown_incident_"+Date.now())
-i=k.$2$fallback(a6.h(0,"event_type"),"General Incident")
-h=k.$2$fallback(a6.h(0,"status"),"Active")
-g=k.$2$fallback(a6.h(0,"warning_level"),"Notice")
-f=k.$2$fallback(a6.h(0,"state"),"Active Status")
-e=a6.h(0,"latitude")!=null&&J.bb(a6.h(0,"latitude")).length!==0?A.tK(J.bb(a6.h(0,"latitude"))):null
-d=a6.h(0,"longitude")!=null&&J.bb(a6.h(0,"longitude")).length!==0?A.tK(J.bb(a6.h(0,"longitude"))):null
-c=k.$2$fallback(a6.h(0,"last_evaluated"),"Not Evaluated")
-b=k.$2$fallback(a6.h(0,"reported_time"),"Recently Reported")
-a=k.$2$fallback(a6.h(0,"expires"),"Open Ended")
-a0=k.$2$fallback(a6.h(0,"description"),"No further details available at this time.")
-a1=k.$2$fallback(a6.h(0,"address"),"Regional Location")
-a2=k.$2$fallback(a6.h(0,"created"),new A.hC(Date.now(),0,!1).aFO())
-a3=a6.h(0,"last_modified")
-a4=A.V(["id",j,"event_type",i,"status",h,"warning_level",g,"state",f,"latitude",e,"longitude",d,"last_evaluated",c,"reported_time",b,"expires",a,"description",a0,"address",a1,"created",a2,"last_modified",k.$2$fallback(a3==null?a6.h(0,"last_updated"):a3,"Just Now")],t.N,t.z)
+case 2:a2=a9
+a3=new A.a8G()
+a4=a3.$2$fallback(a7.h(0,"status"),"active").toLowerCase()
+a5=a4==="completed"||a4==="safe"?"Completed":"Active"
+if(a4==="controlled")a5="Controlled"
+l=a7.h(0,"id")
+if(l==null)l=a7.h(0,"incident_id")
+l=a3.$2$fallback(l,"unknown_incident_"+Date.now())
+k=a7.h(0,"event_type")
+k=a3.$2$fallback(k==null?a7.h(0,"eventType"):k,"General Incident")
+j=a7.h(0,"warning_level")
+j=a3.$2$fallback(j==null?a7.h(0,"warningLevel"):j,"Notice")
+i=a3.$2$fallback(a7.h(0,"state"),"Active Status")
+h=a7.h(0,"latitude")!=null&&J.bb(a7.h(0,"latitude")).length!==0?A.tK(J.bb(a7.h(0,"latitude"))):null
+g=a7.h(0,"longitude")!=null&&J.bb(a7.h(0,"longitude")).length!==0?A.tK(J.bb(a7.h(0,"longitude"))):null
+f=a3.$2$fallback(a7.h(0,"last_evaluated"),"Not Evaluated")
+e=a7.h(0,"reported_time")
+e=a3.$2$fallback(e==null?a7.h(0,"created"):e,"Recently Reported")
+d=a3.$2$fallback(a7.h(0,"expires"),"Open Ended")
+c=a3.$2$fallback(a7.h(0,"description"),"Emergency operations are monitoring current situation parameters.")
+b=a7.h(0,"address")
+b=a3.$2$fallback(b==null?a7.h(0,"location"):b,"Adelaide Regional Location")
+a=a3.$2$fallback(a7.h(0,"created"),new A.hC(Date.now(),0,!1).aFO())
+a0=a7.h(0,"last_modified")
+n=A.V(["id",l,"event_type",k,"status",a5,"warning_level",j,"state",i,"latitude",h,"longitude",g,"last_evaluated",f,"reported_time",e,"expires",d,"description",c,"address",b,"created",a,"last_modified",a3.$2$fallback(a0==null?a7.h(0,"last_updated"):a0,"Just Now")],t.N,t.z)
 q=4
-A.b6("Syncing cleaned dataset entry to local database: "+A.k(J.n(a4,"id")))
+A.b6("Syncing cleaned dataset entry to local database: "+A.k(J.n(n,"id")))
 s=7
-return A.o(J.aZA(l,"notifications",a4,B.pz),$async$uP)
-case 7:k=o.a
-k.sA(k.a+1)
+return A.o(J.aZA(a2,"notifications",n,B.pz),$async$uP)
+case 7:a3=o.a
+a3.sA(a3.a+1)
 q=1
 s=6
 break
 case 4:q=3
-a5=p.pop()
-n=A.a1(a5)
-A.b6("Database Write Failure Intercepted Safely: "+A.k(n))
+a6=p.pop()
+m=A.a1(a6)
+A.b6("Database Write Failure Intercepted Safely: "+A.k(m))
 s=6
 break
 case 3:s=1
