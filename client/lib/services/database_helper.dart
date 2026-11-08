@@ -8,10 +8,11 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
-  // Added reactive synchronisation notifier layer for real-time UI triggering
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
 
-  // In-memory cache for coordinates
+  // Global memory cache to bridge the thread isolation gaps on web browsers
+  final List<Map<String, dynamic>> webGlobalMemoryBuffer = [];
+
   double? cachedLat;
   double? cachedLng;
 
@@ -25,7 +26,6 @@ class DatabaseHelper {
 
   Future<Database> _initDB(String filePath) async {
     if (kIsWeb) {
-      // 🛠️ PURE SQLITE WEB CONFIG: Force a globally named virtual file storage signature
       databaseFactory = databaseFactoryFfiWeb;
       return await openDatabase(filePath, version: 1, onCreate: _createDB);
     } else {
@@ -37,7 +37,6 @@ class DatabaseHelper {
   }
 
   Future _createDB(Database db, int version) async {
-    // 1. Core local notification caching layout table schematic
     await db.execute('''
       CREATE TABLE notifications (
         id TEXT PRIMARY KEY,
@@ -57,7 +56,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // 2. Created persistent configuration metadata table slot tracking
     await db.execute('''
       CREATE TABLE device_config (
         key TEXT PRIMARY KEY,
@@ -66,7 +64,6 @@ class DatabaseHelper {
     ''');
   }
 
-  // Updated type-safe insert method to normalize empty strings and casing parameters cleanly
   Future<void> insertNotification(Map<String, dynamic> dataPayload) async {
     final db = await instance.database;
 
@@ -76,16 +73,6 @@ class DatabaseHelper {
       return str.isEmpty ? fallback : str;
     }
 
-    // 🛠️ CASE STABILIZER: Force incoming string values to fit uniform layout casing patterns
-    String rawStatus = sanitizeString(
-      dataPayload['status'],
-      fallback: 'active',
-    )!.toLowerCase();
-    String normalizedStatus = 'Active';
-    if (rawStatus == 'completed' || rawStatus == 'safe')
-      normalizedStatus = 'Completed';
-    if (rawStatus == 'controlled') normalizedStatus = 'Controlled';
-
     final Map<String, dynamic> row = {
       'id': sanitizeString(
         dataPayload['id'] ?? dataPayload['incident_id'],
@@ -93,43 +80,36 @@ class DatabaseHelper {
       ),
       'event_type': sanitizeString(
         dataPayload['event_type'],
-        fallback: 'General Incident',
+        fallback: 'bushfire',
       ),
-      'status': normalizedStatus, // Capitalized target keys matching UI checks
+      'status': sanitizeString(dataPayload['status'], fallback: 'Active'),
       'warning_level': sanitizeString(
         dataPayload['warning_level'],
         fallback: 'Notice',
       ),
       'state': sanitizeString(dataPayload['state'], fallback: 'Active Status'),
-
-      'latitude':
-          dataPayload['latitude'] != null &&
-              dataPayload['latitude'].toString().isNotEmpty
+      'latitude': dataPayload['latitude'] != null
           ? double.tryParse(dataPayload['latitude'].toString())
           : null,
-      'longitude':
-          dataPayload['longitude'] != null &&
-              dataPayload['longitude'].toString().isNotEmpty
+      'longitude': dataPayload['longitude'] != null
           ? double.tryParse(dataPayload['longitude'].toString())
           : null,
-
       'last_evaluated': sanitizeString(
         dataPayload['last_evaluated'],
         fallback: 'Not Evaluated',
       ),
       'reported_time': sanitizeString(
-        dataPayload['reported_time'] ?? dataPayload['created'],
+        dataPayload['reported_time'],
         fallback: 'Recently Reported',
       ),
       'expires': sanitizeString(dataPayload['expires'], fallback: 'Open Ended'),
-
-      // 🛠️ FIXED COGNIZANCE: Force default text strings if description arrives empty to prevent row drop issues
       'description': sanitizeString(
         dataPayload['description'],
-        fallback: 'Emergency operations are active near tracking coordinates.',
+        fallback:
+            'Emergency operations are active near local tracking boundaries.',
       ),
       'address': sanitizeString(
-        dataPayload['address'] ?? dataPayload['location'],
+        dataPayload['address'],
         fallback: 'Adelaide Regional Location',
       ),
       'created': sanitizeString(
@@ -142,23 +122,36 @@ class DatabaseHelper {
       ),
     };
 
-    try {
-      print("Syncing cleaned dataset entry to local database: ${row['id']}");
+    // Ensures data is visible to the main layout thread instantly
+    final int existingIdx = webGlobalMemoryBuffer.indexWhere(
+      (element) => element['id'] == row['id'],
+    );
+    if (existingIdx != -1) {
+      webGlobalMemoryBuffer[existingIdx] = row;
+    } else {
+      webGlobalMemoryBuffer.insert(0, row);
+    }
 
+    try {
       await db.insert(
         'notifications',
         row,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-
-      // ⚡ ALERT LISTENER STREAM: Forces UI cards to reload instantly on completion
-      syncNotifier.value++;
     } catch (e) {
-      print("Database Write Failure Intercepted Safely: $e");
+      print("Database write failure bypassed: $e");
     }
+
+    // Force layouts to repaint
+    syncNotifier.value++;
   }
 
   Future<List<Map<String, dynamic>>> fetchAllNotifications() async {
+    // If running on web and memory data is populated, return it directly to clear the card status
+    if (kIsWeb && webGlobalMemoryBuffer.isNotEmpty) {
+      return webGlobalMemoryBuffer;
+    }
+
     final db = await instance.database;
     return await db.query('notifications', orderBy: 'created DESC');
   }
