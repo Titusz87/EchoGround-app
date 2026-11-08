@@ -26,11 +26,14 @@ class EmbeddedStreetMap extends StatefulWidget {
   final LatLng? dynamicCenter;
   final double initialZoom;
 
+  final List<Map<String, dynamic>> incidentMarkers;
+
   const EmbeddedStreetMap({
     super.key,
     this.height = 260.0,
     this.dynamicCenter,
     this.initialZoom = 12.0, // Regional 5-10km view
+    this.incidentMarkers = const [],
   });
 
   @override
@@ -38,11 +41,12 @@ class EmbeddedStreetMap extends StatefulWidget {
 }
 
 class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
-  // Change this one line to switch map provider.
   static const String _styleUrl = MapStyles.cartoDark;
 
   MapLibreMapController? _mapController;
   Circle? _locationDot;
+  final List<Circle> _activeIncidentCircles =
+      []; // Tracks drew incident markers to prevent screen leaks
   bool _styleLoaded = false;
 
   @override
@@ -52,6 +56,10 @@ class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
     if (newCenter != null && newCenter != oldWidget.dynamicCenter) {
       _mapController?.animateCamera(CameraUpdate.newLatLng(newCenter));
       _updateLocationDot(newCenter);
+    }
+    // 🎯 RE-TRIGGER LOOP: Automatically updates incident points when database changes
+    if (_styleLoaded && widget.incidentMarkers != oldWidget.incidentMarkers) {
+      _drawIncidentMarkers();
     }
   }
 
@@ -78,6 +86,49 @@ class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
       }
     } catch (e) {
       debugPrint('Could not draw location marker: $e');
+    }
+  }
+
+  // NEW INCIDENT DRAW ENGINE: Loops database items and paints orange alert bounds
+  Future<void> _drawIncidentMarkers() async {
+    final controller = _mapController;
+    if (controller == null || !_styleLoaded) return;
+
+    try {
+      // 1. Wipe out any older circles from the screen canvas
+      for (final circle in _activeIncidentCircles) {
+        await controller.removeCircle(circle);
+      }
+      _activeIncidentCircles.clear();
+
+      // 2. Loop active records and draw them
+      for (final incident in widget.incidentMarkers) {
+        final double? lat = incident['latitude'] is num
+            ? (incident['latitude'] as num).toDouble()
+            : double.tryParse(incident['latitude']?.toString() ?? '');
+        final double? lng = incident['longitude'] is num
+            ? (incident['longitude'] as num).toDouble()
+            : double.tryParse(incident['longitude']?.toString() ?? '');
+
+        if (lat != null && lng != null) {
+          final circle = await controller.addCircle(
+            CircleOptions(
+              geometry: LatLng(lat, lng),
+              circleRadius: 10,
+              circleColor: '#FF9800', // Warning vibrant orange color matching your UI theme
+              circleStrokeColor: '#14171A',
+              circleStrokeWidth: 1.5,
+              circleOpacity: 0.85,
+            ),
+          );
+          _activeIncidentCircles.add(circle);
+        }
+      }
+      debugPrint(
+        'MAP ENGINE: Successfully rendered ${_activeIncidentCircles.length} incident markers on style map.',
+      );
+    } catch (e) {
+      debugPrint('Error placing incident markers: $e');
     }
   }
 
@@ -108,11 +159,11 @@ class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
                 debugPrint('Map style loaded.');
                 final current = widget.dynamicCenter;
                 if (current != null) _updateLocationDot(current);
+                _drawIncidentMarkers(); // Initial draw step call
               },
               myLocationEnabled: false,
               trackCameraPosition: true,
               compassEnabled: false,
-              // Keeps the required map credit visible.
               attributionButtonPosition: AttributionButtonPosition.bottomRight,
             ),
     );

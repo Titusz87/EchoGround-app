@@ -19,7 +19,6 @@ class ActiveIncidentsCard extends StatelessWidget {
         border: Border.all(color: Colors.white10, width: 1),
       ),
       child: ValueListenableBuilder<int>(
-        // ⚡ Listens directly to real-time database broadcast writes
         valueListenable: DatabaseHelper.instance.syncNotifier,
         builder: (context, syncCount, _) {
           return FutureBuilder<List<Map<String, dynamic>>>(
@@ -87,15 +86,28 @@ class ActiveIncidentsCard extends StatelessWidget {
                       ),
                     )
                   else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: incidents.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(color: Colors.white10, height: 24),
-                      itemBuilder: (context, index) {
-                        return IncidentTile(incident: incidents[index]);
-                      },
+                    // FIXED STABILIZATION LAYER: Constrains the maximum growth footprint
+                    // of incoming listings. If you have more than 2 incidents,
+                    // it allows internal card scrolling instead of layout shifting!
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: incidents.length > 2
+                            ? 280.0
+                            : double.infinity,
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        // Allows it to scroll independently inside the card shell framework
+                        physics: incidents.length > 2
+                            ? const ClampingScrollPhysics()
+                            : const NeverScrollableScrollPhysics(),
+                        itemCount: incidents.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(color: Colors.white10, height: 24),
+                        itemBuilder: (context, index) {
+                          return IncidentTile(incident: incidents[index]);
+                        },
+                      ),
                     ),
                 ],
               );
