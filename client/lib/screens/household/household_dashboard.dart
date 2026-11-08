@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/database_helper.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/report_dialog.dart';
+import '../../widgets/household/household_checklist.dart';
 import '../login_page.dart';
 import 'components/marquee_banner.dart';
 
@@ -102,8 +103,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
 
   Widget _buildMainViewContent() {
     // Switch state layout frames based on your bottom navigation choices
-    if (_bottomIndex == 1)
-      return _buildPlaceholderCard('Checklist Content Log', Icons.checklist);
+    if (_bottomIndex == 1) return const HouseholdChecklist();
     if (_bottomIndex == 2)
       return _buildPlaceholderCard(
         'Community Action Plan Matrix',
