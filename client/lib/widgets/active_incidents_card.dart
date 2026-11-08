@@ -108,21 +108,19 @@ class ActiveIncidentsCard extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final item = incidents[index];
 
-                        // 🎯 DIAGNOSTIC LOGGER: Prints values directly to ensure mapping variables read successfully
-                        debugPrint(
-                          '⚙️ CARD RENDER CHECK: Processing index row ID: ${item['id']} | Status: ${item['status']} | Event Type: ${item['event_type']}',
-                        );
+                        // 🛠️ CASE NORMALIZATION LAYER: Extracts status safely as a clean lower-case token to match Python strings
+                        final String currentStatus =
+                            item['status']?.toString().toLowerCase() ?? '';
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             IncidentTile(incident: item),
 
-                            // 🛠️ FALLBACK UI INTERCEPTOR: Displays text metrics directly if IncidentTile is hiding "safe" values
-                            if (item['status']?.toString().toLowerCase() ==
-                                    'safe' ||
-                                item['status']?.toString().toLowerCase() ==
-                                    'validated')
+                            // 🛠️ FALLBACK UI INTERCEPTOR: Automatically maps text metrics if casing variations hidden values before
+                            if (currentStatus == 'active' ||
+                                currentStatus == 'safe' ||
+                                currentStatus == 'completed')
                               Padding(
                                 padding: const EdgeInsets.only(
                                   top: 8.0,
@@ -146,20 +144,26 @@ class ActiveIncidentsCard extends StatelessWidget {
                                     children: [
                                       Row(
                                         children: [
-                                          const Icon(
-                                            Icons.check_circle_outline,
-                                            color: mintGreenAccent,
+                                          Icon(
+                                            currentStatus == 'completed'
+                                                ? Icons.check_circle_outline
+                                                : Icons.warning_amber_rounded,
+                                            color: currentStatus == 'completed'
+                                                ? mintGreenAccent
+                                                : Colors.orangeAccent,
                                             size: 14,
                                           ),
                                           const SizedBox(width: 6),
                                           Text(
-                                            item['event_type']
-                                                    ?.toString()
-                                                    .replaceAll('_', ' ')
-                                                    .toUpperCase() ??
-                                                'INCIDENT',
-                                            style: const TextStyle(
-                                              color: mintGreenAccent,
+                                            (item['event_type'] ?? 'INCIDENT')
+                                                .toString()
+                                                .replaceAll('_', ' ')
+                                                .toUpperCase(),
+                                            style: TextStyle(
+                                              color:
+                                                  currentStatus == 'completed'
+                                                  ? mintGreenAccent
+                                                  : Colors.orangeAccent,
                                               fontSize: 12,
                                               fontWeight: FontWeight.bold,
                                               letterSpacing: 0.5,
