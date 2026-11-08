@@ -6,6 +6,25 @@ import 'incident_tile.dart';
 class ActiveIncidentsCard extends StatelessWidget {
   const ActiveIncidentsCard({super.key});
 
+  // 🛠️ NEW: Force a direct raw query block to bypass table state mirrors
+  Future<List<Map<String, dynamic>>> _forceLoadDatabaseData() async {
+    try {
+      final db = await DatabaseHelper.instance.database;
+      // Pulls directly from the absolute notifications cache layer
+      final List<Map<String, dynamic>> results = await db.query(
+        'notifications',
+        orderBy: 'created DESC',
+      );
+      debugPrint(
+        '🔬 HARD RE-QUERY ENGINE: Pulled ${results.length} literal rows from notifications table.',
+      );
+      return results;
+    } catch (e) {
+      debugPrint('❌ HARD RE-QUERY ERROR: $e');
+      return [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color cardBackground = Color(0xFF14171A);
@@ -22,21 +41,9 @@ class ActiveIncidentsCard extends StatelessWidget {
         valueListenable: DatabaseHelper.instance.syncNotifier,
         builder: (context, syncCount, _) {
           return FutureBuilder<List<Map<String, dynamic>>>(
-            future: DatabaseHelper.instance.fetchAllNotifications(),
+            // 🛠️ FIXED: Swapped for the direct, unfiltered raw re-query task runner
+            future: _forceLoadDatabaseData(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(20.0),
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        mintGreenAccent,
-                      ),
-                    ),
-                  ),
-                );
-              }
-
               final incidents = snapshot.data ?? [];
 
               return Column(
@@ -97,8 +104,6 @@ class ActiveIncidentsCard extends StatelessWidget {
                         final String currentStatus =
                             item['status']?.toString().toLowerCase() ??
                             'active';
-
-                        // 🛠️ CHOSEN DESIGN PATHWAY: Colored highlight configurations matching the exact warning string
                         final bool isResolved =
                             currentStatus == 'completed' ||
                             currentStatus == 'safe';
@@ -110,9 +115,6 @@ class ActiveIncidentsCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             IncidentTile(incident: item),
-
-                            // 🛠️ FIXED CATCH-ALL INTERCEPTOR: Removed strict filtering rules.
-                            // This will ALWAYS display a clean fallback card for any item in the database!
                             Padding(
                               padding: const EdgeInsets.only(
                                 top: 8.0,
@@ -159,7 +161,6 @@ class ActiveIncidentsCard extends StatelessWidget {
                                             ),
                                           ],
                                         ),
-                                        // Badge layout indicator showing the exact raw status text cleanly
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 6,
