@@ -28,7 +28,8 @@ class DatabaseHelper {
       databaseFactory = databaseFactoryFfiWeb;
       return await openDatabase(
         filePath,
-        version: 2,
+        version:
+            3, //UPGRADED SCHEMA to bypass old browser IndexedDB locks cleanly
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
       );
@@ -38,7 +39,7 @@ class DatabaseHelper {
       final path = join(dbPath, filePath);
       return await openDatabase(
         path,
-        version: 2,
+        version: 3, // UPGRADED SCHEMA for system alignment
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
       );
@@ -76,9 +77,9 @@ class DatabaseHelper {
     ''');
   }
 
-  // 🛠️ SEAMLESS SCHEMA EXTENSION: Handles local upgrades gracefully if version ticks up
+  // REINFORCED UPGRADE ENGINE: Re-maps schema version branches sequentially
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
+    if (oldVersion < 3) {
       try {
         await db.execute(
           "ALTER TABLE notifications ADD COLUMN validated_by TEXT;",
@@ -106,7 +107,7 @@ class DatabaseHelper {
       return str.isEmpty ? fallback : str;
     }
 
-    // 🛠️ MULTI-KEY PAYLOAD CATCHER: Maps raw values straight to table structures
+    // 🛠️ PAYLOAD MAPPING ENGINE: Aligned with backend data columns safely
     final Map<String, dynamic> row = {
       'id': sanitizeString(
         dataPayload['id'],
@@ -159,8 +160,6 @@ class DatabaseHelper {
         dataPayload['last_modified'] ?? dataPayload['last_updated'],
         fallback: 'Just Now',
       ),
-
-      // 🛠️ NEW INCOMING COLUMNS INTEGRATED SAFELY
       'validated_by': sanitizeString(
         dataPayload['validated_by'],
         fallback: 'Not Validated',
@@ -184,7 +183,7 @@ class DatabaseHelper {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
-      // BROADCAST TRIGGER ACTIVE: Forces reactive active UI screen widgets to reload
+      // BROADCAST TRIGGER ACTIVE: Forces live active UI widget components to reload instantly
       syncNotifier.value++;
     } catch (e) {
       print("Database Write Failure Intercepted Safely: $e");
