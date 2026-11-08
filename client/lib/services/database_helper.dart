@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb, ValueNotifier;
+import 'package:flutter/foundation.dart' show kIsWeb, ValueNotifier, debugPrint;
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
@@ -10,9 +10,6 @@ class DatabaseHelper {
 
   // Added reactive synchronisation notifier layer for real-time UI triggering
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
-
-  // 🎯 THE WEB STATE BRIDGE: Global memory repo to sync threads if web workers split storage files
-  static final List<Map<String, dynamic>> crossThreadMemoryBuffer = [];
 
   // In-memory cache for coordinates
   double? cachedLat;
@@ -100,126 +97,112 @@ class DatabaseHelper {
   }
 
   Future<void> insertNotification(Map<String, dynamic> dataPayload) async {
-    final db = await instance.database;
-
-    String? sanitizeString(dynamic value, {String? fallback}) {
-      if (value == null) return fallback;
-      final str = value.toString().trim();
-      return str.isEmpty ? fallback : str;
-    }
-
-    // Standardize incoming parameters to uniform keys
-    final Map<String, dynamic> row = {
-      'id': sanitizeString(
-        dataPayload['id'],
-        fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
-      ),
-      'event_type': sanitizeString(
-        dataPayload['event_type'],
-        fallback: 'General Incident',
-      ),
-      'status': sanitizeString(dataPayload['status'], fallback: 'Active'),
-      'warning_level': sanitizeString(
-        dataPayload['warning_level'],
-        fallback: 'Notice',
-      ),
-      'state': sanitizeString(dataPayload['state'], fallback: 'Active Status'),
-
-      'latitude':
-          dataPayload['latitude'] != null &&
-              dataPayload['latitude'].toString().isNotEmpty
-          ? double.tryParse(dataPayload['latitude'].toString())
-          : null,
-      'longitude':
-          dataPayload['longitude'] != null &&
-              dataPayload['longitude'].toString().isNotEmpty
-          ? double.tryParse(dataPayload['longitude'].toString())
-          : null,
-
-      'last_evaluated': sanitizeString(
-        dataPayload['last_evaluated'],
-        fallback: 'Not Evaluated',
-      ),
-      'reported_time': sanitizeString(
-        dataPayload['reported_time'],
-        fallback: 'Recently Reported',
-      ),
-      'expires': sanitizeString(dataPayload['expires'], fallback: 'Open Ended'),
-      'description': sanitizeString(
-        dataPayload['description'],
-        fallback: 'No further details available at this time.',
-      ),
-      'address': sanitizeString(
-        dataPayload['address'],
-        fallback: 'Regional Location',
-      ),
-      'created': sanitizeString(
-        dataPayload['created'],
-        fallback: DateTime.now().toIso8601String(),
-      ),
-      'last_modified': sanitizeString(
-        dataPayload['last_modified'] ?? dataPayload['last_updated'],
-        fallback: 'Just Now',
-      ),
-      'validated_by': sanitizeString(
-        dataPayload['validated_by'],
-        fallback: 'Not Validated',
-      ),
-      'last_updated': sanitizeString(
-        dataPayload['last_updated'],
-        fallback: 'Not Provided',
-      ),
-      'test_incident': sanitizeString(
-        dataPayload['test_incident'],
-        fallback: 'False',
-      ),
-    };
-
-    // 🎯 INJECT STRAIGHT TO SHARED RUNTIME STATIC RAM MEMORY
-    final int existingIdx = crossThreadMemoryBuffer.indexWhere(
-      (element) => element['id'] == row['id'],
-    );
-    if (existingIdx != -1) {
-      crossThreadMemoryBuffer[existingIdx] = row;
-    } else {
-      crossThreadMemoryBuffer.insert(0, row);
-    }
-
+    // WRAP EVERYTHING IN A TOP-LEVEL TRY BLOCK TO PREVENT METOD DROPS
     try {
+      final db = await database;
+
+      String? sanitizeString(dynamic value, {String? fallback}) {
+        if (value == null) return fallback;
+        final str = value.toString().trim();
+        return str.isEmpty ? fallback : str;
+      }
+
+      // TYPE-SAFE NUMERIC PARSER: Handles strings, doubles, and ints cleanly without crashing
+      double? parseCoordinate(dynamic val) {
+        if (val == null) return null;
+        if (val is num) return val.toDouble();
+        return double.tryParse(val.toString().trim());
+      }
+
+      final Map<String, dynamic> row = {
+        'id': sanitizeString(
+          dataPayload['id'],
+          fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
+        ),
+        'event_type': sanitizeString(
+          dataPayload['event_type'],
+          fallback: 'General Incident',
+        ),
+        'status': sanitizeString(dataPayload['status'], fallback: 'Active'),
+        'warning_level': sanitizeString(
+          dataPayload['warning_level'],
+          fallback: 'Notice',
+        ),
+        'state': sanitizeString(
+          dataPayload['state'],
+          fallback: 'Active Status',
+        ),
+
+        // Safely uses the crash-proof parser engine
+        'latitude': parseCoordinate(dataPayload['latitude']),
+        'longitude': parseCoordinate(dataPayload['longitude']),
+
+        'last_evaluated': sanitizeString(
+          dataPayload['last_evaluated'],
+          fallback: 'Not Evaluated',
+        ),
+        'reported_time': sanitizeString(
+          dataPayload['reported_time'],
+          fallback: 'Recently Reported',
+        ),
+        'expires': sanitizeString(
+          dataPayload['expires'],
+          fallback: 'Open Ended',
+        ),
+        'description': sanitizeString(
+          dataPayload['description'],
+          fallback: 'No further details available at this time.',
+        ),
+        'address': sanitizeString(
+          dataPayload['address'],
+          fallback: 'Regional Location',
+        ),
+        'created': sanitizeString(
+          dataPayload['created'],
+          fallback: DateTime.now().toIso8601String(),
+        ),
+        'last_modified': sanitizeString(
+          dataPayload['last_modified'] ?? dataPayload['last_updated'],
+          fallback: 'Just Now',
+        ),
+        'validated_by': sanitizeString(
+          dataPayload['validated_by'],
+          fallback: 'Not Validated',
+        ),
+        'last_updated': sanitizeString(
+          dataPayload['last_updated'],
+          fallback: 'Not Provided',
+        ),
+        'test_incident': sanitizeString(
+          dataPayload['test_incident'],
+          fallback: 'False',
+        ),
+      };
+
+      print(
+        "DATABASE TRACKER: Cleaned row data created successfully for ID: ${row['id']}",
+      );
+      print("Syncing cleaned dataset entry to local database: ${row['id']}");
+
       await db.insert(
         'notifications',
         row,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-    } catch (e) {
-      print("Database Write Failure Intercepted Safely: $e");
-    }
 
-    // ⚡ ALERT USER INTERFACE: Force dashboard layouts to repaint instantly!
-    syncNotifier.value++;
+      // ⚡ BROADCAST TO UI MODULES: Force text dashboard layout components to repaint
+      syncNotifier.value++;
+      print(
+        "DATABASE SUCCESS: SQLite transaction completed for row ID: ${row['id']}",
+      );
+    } catch (methodError) {
+      print("CRITICAL INGESTION CRASH ENCOUNTERED: $methodError");
+    }
   }
 
   Future<List<Map<String, dynamic>>> fetchAllNotifications() async {
-    // 🛠️ WEB THREAD RE-SYNCHRONIZATION:
-    // If running on web and the memory buffer holds data, serve it directly to populate the cards instantly
-    if (kIsWeb && crossThreadMemoryBuffer.isNotEmpty) {
-      return crossThreadMemoryBuffer;
-    }
-
-    try {
-      final db = await instance.database;
-      final List<Map<String, dynamic>> diskResults = await db.query(
-        'notifications',
-        orderBy: 'created DESC',
-      );
-
-      if (kIsWeb && diskResults.isEmpty && crossThreadMemoryBuffer.isNotEmpty) {
-        return crossThreadMemoryBuffer;
-      }
-      return diskResults;
-    } catch (e) {
-      return crossThreadMemoryBuffer;
-    }
+    final db = await instance.database;
+    return await db.query('notifications', orderBy: 'created DESC');
   }
 
   Future<void> saveConfig(String key, String value) async {
