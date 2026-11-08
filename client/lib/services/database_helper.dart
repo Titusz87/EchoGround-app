@@ -25,8 +25,8 @@ class DatabaseHelper {
 
   Future<Database> _initDB(String filePath) async {
     if (kIsWeb) {
+      // 🛠️ PURE SQLITE WEB CONFIG: Force a globally named virtual file storage signature
       databaseFactory = databaseFactoryFfiWeb;
-      // Directly opens the explicit filename on web to bridge the background worker data gap cleanly
       return await openDatabase(filePath, version: 1, onCreate: _createDB);
     } else {
       sqfliteFfiInit();
@@ -57,7 +57,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // 2. FIXED INTEGRATION: Created persistent configuration metadata table slot tracking
+    // 2. Created persistent configuration metadata table slot tracking
     await db.execute('''
       CREATE TABLE device_config (
         key TEXT PRIMARY KEY,
@@ -66,18 +66,17 @@ class DatabaseHelper {
     ''');
   }
 
-  // Updated type-safe insert method to neutralize empty strings and null value fields
+  // Updated type-safe insert method to normalize empty strings and casing parameters cleanly
   Future<void> insertNotification(Map<String, dynamic> dataPayload) async {
     final db = await instance.database;
 
-    // Helper function to convert empty string parameters cleanly to null or fallback labels
     String? sanitizeString(dynamic value, {String? fallback}) {
       if (value == null) return fallback;
       final str = value.toString().trim();
       return str.isEmpty ? fallback : str;
     }
 
-    // 🛠️ CHOSEN DESIGN PATHWAY: Normalize status casing variations directly at write time
+    // 🛠️ CASE STABILIZER: Force incoming string values to fit uniform layout casing patterns
     String rawStatus = sanitizeString(
       dataPayload['status'],
       fallback: 'active',
@@ -87,24 +86,22 @@ class DatabaseHelper {
       normalizedStatus = 'Completed';
     if (rawStatus == 'controlled') normalizedStatus = 'Controlled';
 
-    // Safely structure and extract types matching of incoming live datasets
     final Map<String, dynamic> row = {
       'id': sanitizeString(
         dataPayload['id'] ?? dataPayload['incident_id'],
         fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
       ),
       'event_type': sanitizeString(
-        dataPayload['event_type'] ?? dataPayload['eventType'],
+        dataPayload['event_type'],
         fallback: 'General Incident',
       ),
-      'status': normalizedStatus, // Enforces capitalized fallback names matching UI criteria
+      'status': normalizedStatus, // Capitalized target keys matching UI checks
       'warning_level': sanitizeString(
-        dataPayload['warning_level'] ?? dataPayload['warningLevel'],
+        dataPayload['warning_level'],
         fallback: 'Notice',
       ),
       'state': sanitizeString(dataPayload['state'], fallback: 'Active Status'),
 
-      // Safe parsing parameters for decimals/floats
       'latitude':
           dataPayload['latitude'] != null &&
               dataPayload['latitude'].toString().isNotEmpty
@@ -126,11 +123,10 @@ class DatabaseHelper {
       ),
       'expires': sanitizeString(dataPayload['expires'], fallback: 'Open Ended'),
 
-      // 🛠️ FIXED: Force a robust default value if Python pushes completely empty string values
+      // 🛠️ FIXED COGNIZANCE: Force default text strings if description arrives empty to prevent row drop issues
       'description': sanitizeString(
         dataPayload['description'],
-        fallback:
-            'Emergency operations are monitoring current situation parameters.',
+        fallback: 'Emergency operations are active near tracking coordinates.',
       ),
       'address': sanitizeString(
         dataPayload['address'] ?? dataPayload['location'],
@@ -140,8 +136,6 @@ class DatabaseHelper {
         dataPayload['created'],
         fallback: DateTime.now().toIso8601String(),
       ),
-
-      // Uses 'last_updated' string keys sent by Python if 'last_modified' is omitted
       'last_modified': sanitizeString(
         dataPayload['last_modified'] ?? dataPayload['last_updated'],
         fallback: 'Just Now',
@@ -157,7 +151,7 @@ class DatabaseHelper {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
-      //  BROADCAST LAYER ACTIVE: Increments to trigger active listener views instantly on write
+      // ⚡ ALERT LISTENER STREAM: Forces UI cards to reload instantly on completion
       syncNotifier.value++;
     } catch (e) {
       print("Database Write Failure Intercepted Safely: $e");
@@ -169,9 +163,6 @@ class DatabaseHelper {
     return await db.query('notifications', orderBy: 'created DESC');
   }
 
-  //  Added properties mapping metadata indices down to local disk
-
-  /// Dynamic key-value database schema dictionary writer
   Future<void> saveConfig(String key, String value) async {
     final db = await instance.database;
     await db.insert('device_config', {
@@ -180,7 +171,6 @@ class DatabaseHelper {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  /// Dynamic key-value database schema dictionary reader
   Future<String?> getConfig(String key) async {
     final db = await instance.database;
     final maps = await db.query(
@@ -188,9 +178,7 @@ class DatabaseHelper {
       where: 'key = ?',
       whereArgs: [key],
     );
-    if (maps.isNotEmpty) {
-      return maps.first['value'] as String?;
-    }
+    if (maps.isNotEmpty) return maps.first['value'] as String?;
     return null;
   }
 }

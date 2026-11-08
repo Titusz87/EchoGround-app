@@ -13,8 +13,6 @@ class IncidentTile extends StatefulWidget {
 class _IncidentTileState extends State<IncidentTile> {
   bool _expanded = false;
 
-  // ---- helpers -------------------------------------------------------------
-
   IncidentSource get _source {
     final id = widget.incident['id']?.toString().toLowerCase().trim() ?? '';
     if (id.contains('test_incident')) return IncidentSource.test;
@@ -27,7 +25,10 @@ class _IncidentTileState extends State<IncidentTile> {
     if (level == null) return '⚪';
     final n = level.toLowerCase().trim();
     if (n.isEmpty || n == 'none') return '⚪';
-    if (n.contains('high') || n.contains('critical') || n.contains('red'))
+    if (n.contains('high') ||
+        n.contains('critical') ||
+        n.contains('red') ||
+        n.contains('watch'))
       return '🔴';
     if (n.contains('medium') || n.contains('orange') || n.contains('advice'))
       return '🟠';
@@ -35,9 +36,9 @@ class _IncidentTileState extends State<IncidentTile> {
   }
 
   String _capitalize(String? text) {
-    if (text == null) return 'Unknown';
+    if (text == null) return 'Incident';
     final trimmed = text.toString().trim();
-    if (trimmed.isEmpty) return 'Unknown';
+    if (trimmed.isEmpty) return 'Incident';
     if (trimmed.length == 1) return trimmed.toUpperCase();
     return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
   }
@@ -55,17 +56,10 @@ class _IncidentTileState extends State<IncidentTile> {
     final i = widget.incident;
     final desc = i['description']?.toString().trim() ?? '';
     if (desc.isNotEmpty) return desc;
-
     final addr = i['address']?.toString().trim() ?? '';
     if (addr.isNotEmpty) return addr;
-
-    final statusVal = i['status']?.toString().trim() ?? '';
-    return statusVal.isNotEmpty
-        ? '${_capitalize(statusVal)} · Active'
-        : 'Active Incident';
+    return 'Active emergency incident alert logged on system channel nodes.';
   }
-
-  // ---- UI ------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -73,11 +67,13 @@ class _IncidentTileState extends State<IncidentTile> {
     final theme = Theme.of(context);
     final source = _source;
 
-    // 🛠️ FIXED: Type-safe extraction logic prevents string-to-bool type mapping crashes cleanly
+    //FILTER OUT BROKEN AND COMPLETELY EMPTY PARAMETERS
     final List<MapEntry<String, dynamic>> details = [];
+    final List<String> hiddenKeys = ['id', 'latitude', 'longitude', 'state'];
+
     for (final entry in item.entries) {
       final valStr = entry.value?.toString().trim() ?? '';
-      if (valStr.isNotEmpty && entry.key != 'id') {
+      if (valStr.isNotEmpty && !hiddenKeys.contains(entry.key)) {
         details.add(entry);
       }
     }
@@ -90,10 +86,11 @@ class _IncidentTileState extends State<IncidentTile> {
             Expanded(
               child: Text(
                 '${_levelIcon(item['warning_level']?.toString())} '
-                '${_capitalize(item['event_type']?.toString().replaceAll('_', ' '))}',
+                '${_capitalize(item['event_type']?.toString())}',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
             ),
@@ -105,7 +102,7 @@ class _IncidentTileState extends State<IncidentTile> {
           _summaryLine,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
         ),
         Align(
           alignment: Alignment.centerLeft,
@@ -114,9 +111,7 @@ class _IncidentTileState extends State<IncidentTile> {
               padding: EdgeInsets.zero,
               minimumSize: const Size(0, 32),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              foregroundColor: const Color(
-                0xFF4DB6AC,
-              ), // Premium teal action highlights
+              foregroundColor: const Color(0xFF4DB6AC),
             ),
             onPressed: () => setState(() => _expanded = !_expanded),
             icon: Icon(
@@ -129,7 +124,7 @@ class _IncidentTileState extends State<IncidentTile> {
         AnimatedSize(
           duration: const Duration(milliseconds: 200),
           alignment: Alignment.topCenter,
-          child: _expanded
+          child: _expanded && details.isNotEmpty
               ? Container(
                   width: double.infinity,
                   margin: const EdgeInsets.only(top: 8),
@@ -148,7 +143,7 @@ class _IncidentTileState extends State<IncidentTile> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               SizedBox(
-                                width: 130,
+                                width: 120,
                                 child: Text(
                                   _prettyKey(e.key),
                                   style: const TextStyle(
@@ -185,26 +180,18 @@ class _SourceBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color badgeColor;
-    String label;
+    Color badgeColor = Colors.grey;
+    String label = 'REPORT';
 
-    switch (source) {
-      case IncidentSource.test:
-        badgeColor = Colors.blue;
-        label = 'TEST';
-        break;
-      case IncidentSource.official:
-        badgeColor = Colors.redAccent;
-        label = 'OFFICIAL';
-        break;
-      case IncidentSource.community:
-        badgeColor = Colors.amber;
-        label = 'COMMUNITY';
-        break;
-      case IncidentSource.unknown:
-      default:
-        badgeColor = Colors.grey;
-        label = 'REPORT';
+    if (source == IncidentSource.test) {
+      badgeColor = Colors.blue;
+      label = 'TEST';
+    } else if (source == IncidentSource.official) {
+      badgeColor = Colors.redAccent;
+      label = 'OFFICIAL';
+    } else if (source == IncidentSource.community) {
+      badgeColor = Colors.amber;
+      label = 'COMMUNITY';
     }
 
     return Container(
