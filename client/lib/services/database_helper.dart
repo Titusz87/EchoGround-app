@@ -70,26 +70,36 @@ class DatabaseHelper {
   Future<void> insertNotification(Map<String, dynamic> dataPayload) async {
     final db = await instance.database;
 
-    // Helper helper function to convert empty string parameters cleanly to null or fallback labels
+    // Helper function to convert empty string parameters cleanly to null or fallback labels
     String? sanitizeString(dynamic value, {String? fallback}) {
       if (value == null) return fallback;
       final str = value.toString().trim();
       return str.isEmpty ? fallback : str;
     }
 
+    // 🛠️ CHOSEN DESIGN PATHWAY: Normalize status casing variations directly at write time
+    String rawStatus = sanitizeString(
+      dataPayload['status'],
+      fallback: 'active',
+    )!.toLowerCase();
+    String normalizedStatus = 'Active';
+    if (rawStatus == 'completed' || rawStatus == 'safe')
+      normalizedStatus = 'Completed';
+    if (rawStatus == 'controlled') normalizedStatus = 'Controlled';
+
     // Safely structure and extract types matching of incoming live datasets
     final Map<String, dynamic> row = {
       'id': sanitizeString(
-        dataPayload['id'],
+        dataPayload['id'] ?? dataPayload['incident_id'],
         fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
       ),
       'event_type': sanitizeString(
-        dataPayload['event_type'],
+        dataPayload['event_type'] ?? dataPayload['eventType'],
         fallback: 'General Incident',
       ),
-      'status': sanitizeString(dataPayload['status'], fallback: 'Active'),
+      'status': normalizedStatus, // Enforces capitalized fallback names matching UI criteria
       'warning_level': sanitizeString(
-        dataPayload['warning_level'],
+        dataPayload['warning_level'] ?? dataPayload['warningLevel'],
         fallback: 'Notice',
       ),
       'state': sanitizeString(dataPayload['state'], fallback: 'Active Status'),
@@ -111,24 +121,27 @@ class DatabaseHelper {
         fallback: 'Not Evaluated',
       ),
       'reported_time': sanitizeString(
-        dataPayload['reported_time'],
+        dataPayload['reported_time'] ?? dataPayload['created'],
         fallback: 'Recently Reported',
       ),
       'expires': sanitizeString(dataPayload['expires'], fallback: 'Open Ended'),
+
+      // 🛠️ FIXED: Force a robust default value if Python pushes completely empty string values
       'description': sanitizeString(
         dataPayload['description'],
-        fallback: 'No further details available at this time.',
+        fallback:
+            'Emergency operations are monitoring current situation parameters.',
       ),
       'address': sanitizeString(
-        dataPayload['address'],
-        fallback: 'Regional Location',
+        dataPayload['address'] ?? dataPayload['location'],
+        fallback: 'Adelaide Regional Location',
       ),
       'created': sanitizeString(
         dataPayload['created'],
         fallback: DateTime.now().toIso8601String(),
       ),
 
-      // FIXED: Uses 'last_updated' string keys sent by Python if 'last_modified' is omitted
+      // Uses 'last_updated' string keys sent by Python if 'last_modified' is omitted
       'last_modified': sanitizeString(
         dataPayload['last_modified'] ?? dataPayload['last_updated'],
         fallback: 'Just Now',
