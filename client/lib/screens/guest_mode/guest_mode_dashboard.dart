@@ -16,82 +16,134 @@ class GuestModeDashboard extends StatefulWidget {
 
 class _GuestModeDashboardState extends State<GuestModeDashboard> {
   int _bottomIndex = 0;
+  final GlobalKey _mapKey = GlobalKey();
 
-  /// Extracts active memory values populated by tracking service loops
-  LatLng? _getLiveCacheCoordinates() {
+  /// Extracts coordinates, falling back to Adelaide center if device cache is null
+  LatLng _getSafeCoordinates() {
     final double? lat = DatabaseHelper.instance.cachedLat;
     final double? lng = DatabaseHelper.instance.cachedLng;
 
     if (lat != null && lng != null) {
       return LatLng(lat, lng);
     }
-    return null;
+    return const LatLng(-34.7690, 138.6076);
+  }
+
+  // Loads the active incidents from local SQLite matching tracking layouts
+  Future<List<Map<String, dynamic>>> _loadMapIncidents() async {
+    try {
+      return await DatabaseHelper.instance.fetchAllNotifications();
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final LatLng safeLocation = _getSafeCoordinates();
+    final double mapHeight = _bottomIndex == 0 ? 260.0 : 440.0;
+
+    // Calculates total height of the fixed header section (Map + Titles + Padding)
+    final double fixedHeaderHeight = mapHeight + 104.0;
+
     return Scaffold(
       backgroundColor: const Color(0xFF14171A),
-      appBar: AppBar(
-        title: const Text(''),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-      ),
-      // Listens directly to syncNotifier updates to handle the async loading gap seamlessly
-      body: ValueListenableBuilder<int>(
-        valueListenable: DatabaseHelper.instance.syncNotifier,
-        builder: (context, syncCount, child) {
-          final LatLng? liveLocation = _getLiveCacheCoordinates();
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Guest Mode',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Centered GPS Location Row Layout
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.location_on, color: Color(0xFF4DB6AC), size: 16),
-                    SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        'Adelaide, South Australia · Kaurna Pangkarra',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white60, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                const ActiveIncidentsCard(),
-
-                const SizedBox(height: 16),
-
-                // Map placement area injections
-                if (_bottomIndex == 0) ...[
-                  EmbeddedStreetMap(dynamicCenter: liveLocation),
-                  const SizedBox(height: 24),
-                ] else if (_bottomIndex == 1) ...[
-                  EmbeddedStreetMap(dynamicCenter: liveLocation, height: 440),
-                  const SizedBox(height: 24),
-                ],
-              ],
+      body: Stack(
+        children: [
+          // LAYER 1: The Independent Scrolling Component Panel (Built first so it sits behind)
+          Positioned.fill(
+            child: SingleChildScrollView(
+              // Top padding ensures the cards start rendering exactly beneath your fixed header block
+              padding: EdgeInsets.only(
+                top: fixedHeaderHeight + 16.0,
+                left: 16.0,
+                right: 16.0,
+                bottom: 24.0,
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [ActiveIncidentsCard()],
+              ),
             ),
-          );
-        },
+          ),
+
+          // LAYER 2: The Fixed Header Section (Built second with solid background to hide items sliding under)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: fixedHeaderHeight,
+            child: Container(
+              color: const Color(
+                0xFF14171A,
+              ), // Matches your theme to hide background card overflow elements
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Fixed Aspect Map Window Frame
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: mapHeight,
+                      maxHeight: mapHeight,
+                    ),
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: DatabaseHelper.instance.syncNotifier,
+                      builder: (context, syncCount, child) {
+                        return FutureBuilder<List<Map<String, dynamic>>>(
+                          future: _loadMapIncidents(),
+                          builder: (context, snapshot) {
+                            final incidentList = snapshot.data ?? [];
+
+                            return RepaintBoundary(
+                              child: EmbeddedStreetMap(
+                                key: _mapKey,
+                                dynamicCenter: safeLocation,
+                                incidentMarkers: incidentList,
+                                initialZoom: 10.0,
+                                height: mapHeight,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Fixed Header Text Titles Block
+                  const Text(
+                    'Guest Mode',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        color: Color(0xFF4DB6AC),
+                        size: 16,
+                      ),
+                      SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Adelaide, South Australia',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white60, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: _buildBottomNav(),
     );
