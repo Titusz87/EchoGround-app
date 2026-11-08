@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/database_helper.dart';
 import '../../widgets/embedded_street_map.dart';
+import '../../widgets/active_incidents_card.dart';
 import '../login_page.dart';
 
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -75,7 +76,8 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
                 ),
                 const SizedBox(height: 24),
 
-                _buildActiveIncidentsCard(),
+                const ActiveIncidentsCard(),
+
                 const SizedBox(height: 16),
 
                 // Map placement area injections
@@ -92,55 +94,6 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
         },
       ),
       bottomNavigationBar: _buildBottomNav(),
-    );
-  }
-
-  Widget _buildActiveIncidentsCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF14171A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10, width: 1),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.orangeAccent,
-                size: 20,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'ACTIVE INCIDENTS',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 4),
-          Text(
-            '0 active incidents',
-            style: TextStyle(color: Colors.white38, fontSize: 12),
-          ),
-          SizedBox(height: 24),
-          Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
-              child: Text(
-                'No current incidents reported.',
-                style: TextStyle(color: Colors.white38, fontSize: 13),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
