@@ -130,7 +130,8 @@ class _IncidentTileState extends State<IncidentTile> {
                   margin: const EdgeInsets.only(top: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.02),
+                    // 🛠️ FIXED: Changed from .withValues() to standard stable .withOpacity()
+                    color: Colors.white.withOpacity(0.02),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.white10),
                   ),
@@ -197,7 +198,8 @@ class _SourceBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: badgeColor.withValues(alpha: 0.15),
+        //Changed from .withValues() to standard stable .withOpacity()
+        color: badgeColor.withOpacity(0.15),
         border: Border.all(color: badgeColor, width: 1),
         borderRadius: BorderRadius.circular(4),
       ),
