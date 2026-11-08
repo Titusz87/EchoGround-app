@@ -8,29 +8,20 @@ class ActiveIncidentsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color cardBackground = Color(
-      0xFF14171A,
-    ); // Matte dark grey background profile
-    const Color mintGreenAccent = Color(
-      0xFF4DB6AC,
-    ); // Vibrant theme accent highlight color
+    const Color cardBackground = Color(0xFF14171A);
+    const Color mintGreenAccent = Color(0xFF4DB6AC);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardBackground,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white10,
-          width: 1,
-        ), // Thin structural layout boundaries
+        border: Border.all(color: Colors.white10, width: 1),
       ),
       child: ValueListenableBuilder<int>(
-        // 1. Monitors real-time SQLite insertions and background sync updates
         valueListenable: DatabaseHelper.instance.syncNotifier,
         builder: (context, syncCount, _) {
           return FutureBuilder<List<Map<String, dynamic>>>(
-            // 2. Automatically triggers a fresh query whenever syncCount ticks up
             future: DatabaseHelper.instance.fetchAllNotifications(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -51,7 +42,6 @@ class ActiveIncidentsCard extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header Row Configuration
                   const Row(
                     children: [
                       Icon(
@@ -82,10 +72,7 @@ class ActiveIncidentsCard extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 12),
-                  const Divider(
-                    color: Colors.white10,
-                    height: 1,
-                  ), // Cross-separator line
+                  const Divider(color: Colors.white10, height: 1),
                   const SizedBox(height: 12),
 
                   if (incidents.isEmpty)
@@ -107,83 +94,115 @@ class ActiveIncidentsCard extends StatelessWidget {
                           const Divider(color: Colors.white10, height: 24),
                       itemBuilder: (context, index) {
                         final item = incidents[index];
-
-                        // 🛠️ CASE NORMALIZATION LAYER: Extracts status safely as a clean lower-case token to match Python strings
                         final String currentStatus =
-                            item['status']?.toString().toLowerCase() ?? '';
+                            item['status']?.toString().toLowerCase() ??
+                            'active';
+
+                        // 🛠️ CHOSEN DESIGN PATHWAY: Colored highlight configurations matching the exact warning string
+                        final bool isResolved =
+                            currentStatus == 'completed' ||
+                            currentStatus == 'safe';
+                        final Color statusColor = isResolved
+                            ? mintGreenAccent
+                            : Colors.orangeAccent;
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             IncidentTile(incident: item),
 
-                            // 🛠️ FALLBACK UI INTERCEPTOR: Automatically maps text metrics if casing variations hidden values before
-                            if (currentStatus == 'active' ||
-                                currentStatus == 'safe' ||
-                                currentStatus == 'completed')
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 8.0,
-                                  left: 4.0,
-                                ),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.03),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.05,
-                                      ),
-                                    ),
+                            // 🛠️ FIXED CATCH-ALL INTERCEPTOR: Removed strict filtering rules.
+                            // This will ALWAYS display a clean fallback card for any item in the database!
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: 8.0,
+                                left: 4.0,
+                              ),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.03),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.05),
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            currentStatus == 'completed'
-                                                ? Icons.check_circle_outline
-                                                : Icons.warning_amber_rounded,
-                                            color: currentStatus == 'completed'
-                                                ? mintGreenAccent
-                                                : Colors.orangeAccent,
-                                            size: 14,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              isResolved
+                                                  ? Icons.check_circle_outline
+                                                  : Icons.warning_amber_rounded,
+                                              color: statusColor,
+                                              size: 14,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              (item['event_type'] ?? 'INCIDENT')
+                                                  .toString()
+                                                  .replaceAll('_', ' ')
+                                                  .toUpperCase(),
+                                              style: TextStyle(
+                                                color: statusColor,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        // Badge layout indicator showing the exact raw status text cleanly
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
                                           ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            (item['event_type'] ?? 'INCIDENT')
-                                                .toString()
-                                                .replaceAll('_', ' ')
-                                                .toUpperCase(),
-                                            style: TextStyle(
-                                              color:
-                                                  currentStatus == 'completed'
-                                                  ? mintGreenAccent
-                                                  : Colors.orangeAccent,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 0.5,
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withValues(
+                                              alpha: 0.1,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        item['description'] ?? 'No further details available at this time.',
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 13,
-                                          height: 1.3,
+                                          child: Text(
+                                            currentStatus.toUpperCase(),
+                                            style: TextStyle(
+                                              color: statusColor,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      (item['description'] == null ||
+                                              item['description']
+                                                  .toString()
+                                                  .trim()
+                                                  .isEmpty)
+                                          ? 'Incident logged with status: $currentStatus. Monitoring situation parameters.'
+                                          : item['description'].toString(),
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                        height: 1.3,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
+                            ),
                           ],
                         );
                       },
