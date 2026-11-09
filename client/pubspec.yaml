@@ -101,19 +101,22 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_native_splash:
-  color: "#ffffff" #  splash background color
-  image: lib/assets/images/app/logo.jpg # Path to splash image
+  color: "#14171A" # Deep charcoal black background
+  image: lib/assets/images/app/logo.png
   
   # platform-specific overrides
   android: true
   ios: true
+  web: true
 
   android_12:
-    color: "#FFFFFF"
-    # 2. Path to your logo for Android 12 through Android 15:
-    image: lib/assets/images/app/logo.jpg
+    color: "#14171A"
+    image: lib/assets/images/app/logo.png
+
 
 flutter_launcher_icons:
   android: true     
   ios: true
-  image_path: "lib/assets/images/app/launcher_icon.jpg" 
+  image_path: "lib/assets/images/app/launcher_icon.png"
+  adaptive_icon_background: "#14171A" 
+  adaptive_icon_foreground: "lib/assets/images/app/launcher_icon.png"

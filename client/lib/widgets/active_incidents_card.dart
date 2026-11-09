@@ -37,7 +37,13 @@ class ActiveIncidentsCard extends StatelessWidget {
                 );
               }
 
-              final incidents = snapshot.data ?? [];
+              //FILTER LAYER: Extract ONLY official/test incidents. Exclude community reports.
+              final allNotifications = snapshot.data ?? [];
+              final incidents = allNotifications.where((item) {
+                final id = item['id']?.toString() ?? '';
+                return !id.startsWith('unknown_incident') &&
+                    !id.contains('community_report');
+              }).toList();
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,7 +76,6 @@ class ActiveIncidentsCard extends StatelessWidget {
                       fontWeight: FontWeight.w400,
                     ),
                   ),
-
                   const SizedBox(height: 12),
                   const Divider(color: Colors.white10, height: 1),
                   const SizedBox(height: 12),
@@ -86,9 +91,6 @@ class ActiveIncidentsCard extends StatelessWidget {
                       ),
                     )
                   else
-                    // FIXED STABILIZATION LAYER: Constrains the maximum growth footprint
-                    // of incoming listings. If you have more than 2 incidents,
-                    // it allows internal card scrolling instead of layout shifting!
                     ConstrainedBox(
                       constraints: BoxConstraints(
                         maxHeight: incidents.length > 2
@@ -97,7 +99,6 @@ class ActiveIncidentsCard extends StatelessWidget {
                       ),
                       child: ListView.separated(
                         shrinkWrap: true,
-                        // Allows it to scroll independently inside the card shell framework
                         physics: incidents.length > 2
                             ? const ClampingScrollPhysics()
                             : const NeverScrollableScrollPhysics(),

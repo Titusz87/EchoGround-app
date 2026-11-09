@@ -4,6 +4,7 @@ import '../../services/database_helper.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/report_dialog.dart';
 import '../../widgets/household/household_checklist.dart';
+import '../../widgets/incident_tile.dart';
 import '../login_page.dart';
 import 'components/marquee_banner.dart';
 
@@ -104,7 +105,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
   Widget _buildMainViewContent() {
     // Switch state layout frames based on your bottom navigation choices
     if (_bottomIndex == 1) return const HouseholdChecklist();
-    if (_bottomIndex == 2)
+    if (_bottomIndex == 3)
       return _buildPlaceholderCard(
         'Community Action Plan Matrix',
         Icons.groups,
@@ -118,14 +119,107 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
           data: Theme.of(context).copyWith(
             textTheme: Theme.of(context).textTheme.apply(fontSizeFactor: 0.88),
           ),
-          child: ActiveIncidentsCard(),
+          child: const ActiveIncidentsCard(),
         ),
         const SizedBox(height: 16),
-        _buildPlaceholderCard(
-          'Community Reports Feed',
-          Icons.assignment_turned_in_outlined,
-        ),
+        _buildCommunityReportsFeed(),
       ],
+    );
+  }
+
+  // 🛠️ DYNAMIC COMMUNITY REPORT FEED INTERCEPTOR
+  Widget _buildCommunityReportsFeed() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF14171A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: ValueListenableBuilder<int>(
+        valueListenable: DatabaseHelper.instance.syncNotifier,
+        builder: (context, syncCount, _) {
+          return FutureBuilder<List<Map<String, dynamic>>>(
+            future: DatabaseHelper.instance.fetchAllNotifications(),
+            builder: (context, snapshot) {
+              final rawList = snapshot.data ?? [];
+
+              // 1. Filter out only entries that are community reports
+              final reports = rawList.where((item) {
+                final id = item['id']?.toString() ?? '';
+                return id.startsWith('unknown_incident') ||
+                    id.contains('community_report');
+              }).toList();
+
+              // 2. Anti-Duplication normalization layer: deduplicate by event type and time window
+              final List<Map<String, dynamic>> uniqueReports = [];
+              final Set<String> seenSignatures = {};
+
+              for (var r in reports) {
+                final type =
+                    r['event_type']?.toString().toLowerCase().trim() ?? '';
+                final created = r['created']?.toString().trim() ?? '';
+                // Take base minute string slice or approximate group criteria signature
+                final timeSig = created.length > 16
+                    ? created.substring(0, 16)
+                    : created;
+                final signature = '${type}_$timeSig';
+
+                if (!seenSignatures.contains(signature)) {
+                  seenSignatures.add(signature);
+                  uniqueReports.add(r);
+                }
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.assignment_turned_in_outlined,
+                        color: Color(0xFF4DB6AC),
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'COMMUNITY REPORTS FEED',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (uniqueReports.isEmpty)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24.0),
+                        child: Text(
+                          'No public community reports active in your sector context.',
+                          style: TextStyle(color: Colors.white38, fontSize: 13),
+                        ),
+                      ),
+                    )
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: uniqueReports.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(color: Colors.white10, height: 16),
+                      itemBuilder: (context, index) {
+                        return IncidentTile(incident: uniqueReports[index]);
+                      },
+                    ),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -173,7 +267,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
     return NavigationBar(
       selectedIndex: _bottomIndex,
       onDestinationSelected: (idx) {
-        if (idx == 3) {
+        if (idx == 2) {
           // Trigger the 3-page structural report dialog modal overlay pattern
           showReportDialog(context);
         } else if (idx == 4) {
@@ -198,14 +292,14 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
           label: 'Checklist',
         ),
         NavigationDestination(
-          icon: Icon(Icons.groups_outlined),
-          selectedIcon: Icon(Icons.groups),
-          label: 'Plan',
-        ),
-        NavigationDestination(
           icon: Icon(Icons.report_outlined, color: Colors.redAccent),
           selectedIcon: Icon(Icons.report, color: Colors.redAccent),
           label: 'Report',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.groups_outlined),
+          selectedIcon: Icon(Icons.groups),
+          label: 'Plan',
         ),
         NavigationDestination(
           icon: Icon(Icons.account_circle_outlined),

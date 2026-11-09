@@ -4,13 +4,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-<<<<<<< HEAD
-import '../../../services/auth_service.dart';
-import '../../../services/database_helper.dart';
-=======
-import '../services/auth_service.dart';
-import '../services/database_helper.dart';
->>>>>>> 2551fc536f64b57a69dcd2098ad1cebf212d0610
+import '../../services/auth_service.dart';
+import '../../services/database_helper.dart';
 
 /// Shows the login / sign-up dialog for either a household or a community leader.
 /// [onAuthSuccess] is called after a successful login or registration.
@@ -34,7 +29,6 @@ void showLoginDialog(
   /// Fetches the list of community names from the backend environment.
   Future<List<String>> fetchCommunityNames() async {
     try {
-      // FIXED: Reads your deployment environment variables directly instead of looking inside an empty database table
       const String backendUrl = String.fromEnvironment(
         'BACKEND_URL',
         defaultValue: 'http://127.0.0.1:8000',
@@ -60,9 +54,10 @@ void showLoginDialog(
               .map((item) {
                 if (item is Map) {
                   return (item['community_name'] ?? item['name'] ?? '')
-                      .toString();
+                      .toString()
+                      .trim();
                 }
-                return item.toString();
+                return item.toString().trim();
               })
               .where((name) => name.isNotEmpty)
               .toList();
@@ -181,7 +176,7 @@ void showLoginDialog(
                           ),
                           const SizedBox(height: 12),
 
-                          // 🛠️ CASE A: HOUSEHOLD SEEKS AN EXISTING COMMUNITY FROM DROPDOWN
+                          // CASE A: HOUSEHOLD SEEKS AN EXISTING COMMUNITY FROM DROPDOWN
                           FutureBuilder<List<String>>(
                             future: communitiesFuture,
                             builder: (context, snapshot) {
@@ -226,7 +221,7 @@ void showLoginDialog(
                             },
                           ),
                         ] else ...[
-                          // 🛠️ CASE B: LEADER CREATES/TYPES A BRAND NEW COMMUNITY NAME
+                          // CASE B: LEADER CREATES/TYPES A BRAND NEW COMMUNITY NAME
                           TextField(
                             controller: communityController,
                             style: const TextStyle(color: Colors.white),
@@ -239,7 +234,6 @@ void showLoginDialog(
                         ],
                         const SizedBox(height: 12),
                       ],
-
                       TextField(
                         controller: passwordController,
                         obscureText: true,
@@ -265,6 +259,17 @@ void showLoginDialog(
                           ),
                           onPressed: () async {
                             setState(() => errorMessage = null);
+                            // Sanitize form values completely
+                            final String cleanPassword = passwordController.text
+                                .trim();
+                            final String cleanCommunity = communityController
+                                .text
+                                .trim();
+                            final String cleanPhone = phoneController.text
+                                .trim();
+                            final String cleanSecondaryName = nameController
+                                .text
+                                .trim();
                             final int? parsedId =
                                 await AuthService.ensureBackendPersonId(
                                   context,
@@ -275,7 +280,7 @@ void showLoginDialog(
                               );
                               return;
                             }
-                            if (passwordController.text.trim().isEmpty) {
+                            if (cleanPassword.isEmpty) {
                               setState(
                                 () => errorMessage =
                                     'Password field cannot be empty.',
@@ -286,11 +291,33 @@ void showLoginDialog(
                             if (isLogin) {
                               success = await AuthService.login(
                                 id: parsedId,
-                                password: passwordController.text.trim(),
+                                password: cleanPassword,
                                 isLeader: isLeader,
                               );
+                              // RELOGIN LOCAL DATA RECOVERY BACKUP:
+                              // If your auth service doesn't return the community string upon a login action,
+                              // check if there's an existing cache on disk. If empty, fall back to whatever is currently
+                              // typed or selected in the login fields to preserve context!
+                              if (success && isLeader) {
+                                final String diskCachedComm =
+                                    await DatabaseHelper.instance.getConfig(
+                                      'auth_community_name',
+                                    ) ??
+                                    '';
+                                if (diskCachedComm.trim().isEmpty &&
+                                    cleanCommunity.isNotEmpty) {
+                                  await DatabaseHelper.instance.saveConfig(
+                                    'auth_community_name',
+                                    cleanCommunity,
+                                  );
+                                  await DatabaseHelper.instance.saveConfig(
+                                    'community_name',
+                                    cleanCommunity,
+                                  );
+                                }
+                              }
                             } else {
-                              if (communityController.text.trim().isEmpty) {
+                              if (cleanCommunity.isEmpty) {
                                 setState(() {
                                   errorMessage = isLeader
                                       ? 'Please specify a name for your new community.'
@@ -300,24 +327,34 @@ void showLoginDialog(
                               }
                               success = await AuthService.register(
                                 id: parsedId,
-                                password: passwordController.text.trim(),
-                                phone: phoneController.text.trim(),
-                                secondaryName: nameController.text.trim(),
-                                communityName: communityController.text.trim(),
+                                password: cleanPassword,
+                                phone: cleanPhone,
+                                secondaryName: cleanSecondaryName,
+                                communityName: cleanCommunity,
                                 count:
                                     int.tryParse(countController.text.trim()) ??
                                     1,
                                 isLeader: isLeader,
                               );
-                            }
-                            if (success) {
-                              // Registration opens the dashboard too; retain its household session.
-                              if (!isLeader) {
+                              // REGISTRATION CONFIG PERSISTENCE SANITIZER:
+                              // Ensures your freshly customized community is stored directly inside SQLite configs safely on creation
+                              if (success) {
                                 await DatabaseHelper.instance.saveConfig(
-                                  'auth_household_id',
+                                  'auth_leader_id',
                                   parsedId.toString(),
                                 );
+                                await DatabaseHelper.instance.saveConfig(
+                                  'auth_community_name',
+                                  cleanCommunity,
+                                );
+                                await DatabaseHelper.instance.saveConfig(
+                                  'community_name',
+                                  cleanCommunity,
+                                );
                               }
+                            }
+                            if (success) {
+                              DatabaseHelper.instance.syncNotifier.value++;
                               Navigator.of(context).pop();
                               onAuthSuccess();
                             } else {
