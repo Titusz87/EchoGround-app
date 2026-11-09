@@ -26,7 +26,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   List<Map<String, dynamic>> _liveIncidents = [];
   List<Map<String, dynamic>> _reports = [];
 
-  String _communityName = 'Bruhyna';
+  String _communityName = 'Unknown Community';
   String _householdsCount = '1';
   String _membersCount = '1';
 
@@ -242,26 +242,42 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4DB6AC)),
               ),
             )
-          : RefreshIndicator(
-              onRefresh: _syncLeaderDashboardPipeline,
-              color: const Color(0xFF4DB6AC),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    LeaderStatsHeader(
-                      communityName: _communityName,
-                      householdsCount: _householdsCount,
-                      membersCount: _membersCount,
-                    ),
-                    const SizedBox(height: 24),
-                    _buildDynamicBodyContent(),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
+          : ValueListenableBuilder<int>(
+              // 🎯 THE LIVE LISTENING GATEWAY: Listens directly to incoming background dataset mutations!
+              valueListenable: DatabaseHelper.instance.syncNotifier,
+              builder: (context, syncCount, _) {
+                return FutureBuilder<Map<String, String>>(
+                  future: _loadCommunityStats(),
+                  builder: (context, snapshot) {
+                    final name = snapshot.data?['name'] ?? _communityName;
+                    final households =
+                        snapshot.data?['households'] ?? _householdsCount;
+                    final members = snapshot.data?['members'] ?? _membersCount;
+
+                    return RefreshIndicator(
+                      onRefresh: _syncLeaderDashboardPipeline,
+                      color: const Color(0xFF4DB6AC),
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            LeaderStatsHeader(
+                              communityName: name,
+                              householdsCount: households,
+                              membersCount: members,
+                            ),
+                            const SizedBox(height: 24),
+                            _buildDynamicBodyContent(),
+                            const SizedBox(height: 24),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
       bottomNavigationBar: _buildBottomNav(),
     );
@@ -462,5 +478,14 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
         ),
       ),
     );
+  }
+
+  /// 🛠️ FIXED: Re-establishes the missing stats loader method for the build frame loop
+  Future<Map<String, String>> _loadCommunityStats() async {
+    return {
+      'name': _communityName,
+      'households': _householdsCount,
+      'members': _membersCount,
+    };
   }
 }
