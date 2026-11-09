@@ -131,7 +131,7 @@ class DatabaseHelper {
           fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
         ),
         'event_type': sanitizeString(
-          dataPayload['event_type'],
+          dataPayload['title'],
           fallback: 'General Incident',
         ),
         'status': sanitizeString(dataPayload['status'], fallback: 'Active'),
