@@ -1,52 +1,230 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../../services/database_helper.dart';
 import '../login_page.dart';
-import 'components/leader_reports_log.dart';
+import 'components/leader_stats_header.dart';
+import 'components/active_incidents_section.dart';
+import 'components/reports_log_section.dart';
 
 class LeaderDashboard extends StatefulWidget {
-  const LeaderDashboard({super.key});
+  final String? communityFallback;
+  const LeaderDashboard({super.key, this.communityFallback});
 
   @override
   State<LeaderDashboard> createState() => _LeaderDashboardState();
 }
 
 class _LeaderDashboardState extends State<LeaderDashboard> {
-  int _bottomIndex =
-      0; // Standard bottom navigation item controller index tracking
+  int _bottomIndex = 0;
+  bool _isNetworkLoading = false;
 
-  final List<Map<String, dynamic>> _reports = [
-    {
-      'id': 'rep_01',
-      'sender_name': 'Thomas Tarcsai',
-      'phone': '+61 412 345 678',
-      'type': 'Bushfire Proximity',
-      'location': '📍 Broome, WA · Yawuru',
-      'description': 'Smoke columns visible near the northeast ridgeline. Wind shifting toward residential boundary paths.',
-      'status': null,
-    },
-    {
-      'id': 'rep_02',
-      'sender_name': 'Sarah Jenkins',
-      'phone': '+61 498 765 432',
-      'type': 'Flash Flood',
-      'location': '📍 Roebuck Bay Crossing',
-      'description': 'Water levels have risen over the primary access road crossing infrastructure. Small cars cannot pass.',
-      'status': null,
-    },
-  ];
+  static const String _backendBaseUrl = String.fromEnvironment('BACKEND_URL');
 
-  Future<Map<String, String>> _loadCommunityStats() async {
-    final name =
-        await DatabaseHelper.instance.getConfig('auth_community_name') ??
-        'Bruhyna';
-    final households =
-        await DatabaseHelper.instance.getConfig('community_households_count') ??
-        '1';
-    final members =
-        await DatabaseHelper.instance.getConfig('community_members_count') ??
-        '1';
-    return {'name': name, 'households': households, 'members': members};
+  List<Map<String, dynamic>> _liveIncidents = [];
+  List<Map<String, dynamic>> _reports = [];
+
+  String _communityName = 'Bruhyna';
+  String _householdsCount = '1';
+  String _membersCount = '1';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.communityFallback != null &&
+        widget.communityFallback!.trim().isNotEmpty) {
+      _communityName = widget.communityFallback!.trim();
+    }
+    _syncLeaderDashboardPipeline();
+  }
+
+  Future<http.Response> _executeAdaptivePost(
+    String endpointPath, {
+    Object? body,
+  }) async {
+    // Read the compiled build flag first
+    const String injectedBaseUrl = String.fromEnvironment('BACKEND_URL');
+
+    final List<String> targetBaseUrls = [
+      // Option 1: Prioritize the dynamic deployment environment string if provided
+      if (injectedBaseUrl.isNotEmpty) injectedBaseUrl,
+
+      // Option 2: Fall back to local machine loop for internal testing
+      'http://127.0.0.1:8000',
+    ];
+
+    http.Response? finalResponse;
+    for (String baseUrl in targetBaseUrls) {
+      try {
+        // Automatically strips trailing slashes to prevent malformed '//' route lines pathing errors
+        final cleanBaseUrl = baseUrl.endsWith('/')
+            ? baseUrl.substring(0, baseUrl.length - 1)
+            : baseUrl;
+
+        finalResponse = await http
+            .post(
+              Uri.parse('$cleanBaseUrl$endpointPath'),
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode(body ?? {}),
+            )
+            .timeout(const Duration(seconds: 4));
+
+        if (finalResponse.statusCode == 200) {
+          debugPrint(
+            'ECO NETWORK: Connected successfully via node: $cleanBaseUrl',
+          );
+          return finalResponse;
+        }
+      } catch (err) {
+        debugPrint(
+          'ECO NETWORK: Skipping node $baseUrl due to connection fault: $err',
+        );
+      }
+    }
+    if (finalResponse != null) return finalResponse;
+    throw Exception(
+      'Adaptive system network configuration routing parameters exhausted.',
+    );
+  }
+
+  Future<void> _syncLeaderDashboardPipeline() async {
+    if (!mounted) return;
+    setState(() => _isNetworkLoading = true);
+
+    try {
+      // 1. Extract your cached leader string ID from SQLite and parse it to an integer
+      final String rawLeaderId =
+          await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
+      final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
+
+      // Extract text labels safely to populate your top description markers header card
+      final String rawCommunity =
+          await DatabaseHelper.instance.getConfig('auth_community_name') ??
+          await DatabaseHelper.instance.getConfig('community_name') ??
+          'Unknown Community';
+      final String currentCommunity = rawCommunity.trim();
+      final String rawHouseholds =
+          await DatabaseHelper.instance.getConfig(
+            'community_households_count',
+          ) ??
+          '1';
+      final String rawMembers =
+          await DatabaseHelper.instance.getConfig('community_members_count') ??
+          '1';
+
+      // MATCHES YOUR SWAGGER BLUEPRINT OVERLAYS EXACTLY
+      final Map<String, int> requestPayload = {'id': parsedLeaderId};
+
+      // 2. Fetch Authoritative Official Incidents (Clean POST path with JSON body)
+      final incidentRes = await _executeAdaptivePost(
+        '/community-leader/get-incidents',
+        body: requestPayload,
+      );
+
+      // 3. Refresh dynamic community report metrics and listings log entries
+      final reportsRes = await _executeAdaptivePost(
+        '/community-leader/refresh-dashboard',
+        body: requestPayload,
+      );
+
+      if (incidentRes.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(incidentRes.body);
+        if (data['incidents'] != null) {
+          _liveIncidents = List<Map<String, dynamic>>.from(data['incidents']);
+        }
+      }
+
+      if (reportsRes.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(reportsRes.body);
+        if (data['reports'] != null) {
+          _reports = List<Map<String, dynamic>>.from(data['reports']);
+        }
+
+        setState(() {
+          _communityName = currentCommunity;
+          _householdsCount = (data['households_count'] ?? rawHouseholds.trim())
+              .toString();
+          _membersCount = (data['members_count'] ?? rawMembers.trim())
+              .toString();
+        });
+      }
+    } catch (e) {
+      debugPrint('Leader Offline Subsystem Activated: $e');
+      final allCached = await DatabaseHelper.instance.fetchAllNotifications();
+      setState(() {
+        _liveIncidents = allCached
+            .where(
+              (item) =>
+                  !(item['id']?.toString().startsWith('unknown_incident') ??
+                      false),
+            )
+            .toList();
+        _reports = allCached
+            .where(
+              (item) =>
+                  (item['id']?.toString().startsWith('unknown_incident') ??
+                  false),
+            )
+            .toList();
+      });
+    } finally {
+      if (mounted) setState(() => _isNetworkLoading = false);
+    }
+  }
+
+  /// 🛠️ CONNECTED REVIEWS PIPELINE ACTION: Dispatches PUT validations as structured inside Swagger
+  Future<void> submitReportValidationAction(
+    String targetReportId,
+    String broadcastNotice,
+  ) async {
+    final String rawLeaderId =
+        await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
+    final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
+
+    // 🛠️ PUT BLUEPRINT SCHEMA MAPPING
+    final Map<String, dynamic> validationPayload = {
+      'id': parsedLeaderId,
+      'validated_incidents': [
+        targetReportId,
+      ], // Target tracking unique string nested inside array
+      'notice': broadcastNotice.trim().isNotEmpty
+          ? broadcastNotice.trim()
+          : 'Verified by sector community leader.',
+    };
+
+    try {
+      const String injectedBaseUrl = String.fromEnvironment('BACKEND_URL');
+      final List<String> targetBaseUrls = [
+        if (injectedBaseUrl.isNotEmpty) injectedBaseUrl,
+        'http://127.0.0.1:8000',
+      ];
+
+      for (String baseUrl in targetBaseUrls) {
+        try {
+          final cleanBaseUrl = baseUrl.endsWith('/')
+              ? baseUrl.substring(0, baseUrl.length - 1)
+              : baseUrl;
+
+          final response = await http
+              .put(
+                Uri.parse('$cleanBaseUrl/community-leader/validate-incidents'),
+                headers: {'Content-Type': 'application/json'},
+                body: json.encode(validationPayload),
+              )
+              .timeout(const Duration(seconds: 4));
+
+          if (response.statusCode == 200) {
+            // Re-sync local states immediately to flash color updates in real time!
+            _syncLeaderDashboardPipeline();
+            break;
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Validation submission fault error: $e');
+    }
   }
 
   @override
@@ -58,111 +236,59 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: FutureBuilder<Map<String, String>>(
-        future: _loadCommunityStats(),
-        builder: (context, snapshot) {
-          final name = snapshot.data?['name'] ?? 'Bruhyna';
-          final households = snapshot.data?['households'] ?? '1';
-          final members = snapshot.data?['members'] ?? '1';
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Community $name',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+      body: _isNetworkLoading
+          ? const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4DB6AC)),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _syncLeaderDashboardPipeline,
+              color: const Color(0xFF4DB6AC),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    LeaderStatsHeader(
+                      communityName: _communityName,
+                      householdsCount: _householdsCount,
+                      membersCount: _membersCount,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildDynamicBodyContent(),
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Households: $households\nMembers: $members',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.white60,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Active Core Render Shell
-                _buildDynamicBodyContent(),
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
-          );
-        },
-      ),
       bottomNavigationBar: _buildBottomNav(),
     );
   }
 
   Widget _buildDynamicBodyContent() {
-    if (_bottomIndex == 1)
+    if (_bottomIndex == 1) {
       return _buildPlaceholderCard(
         'Community Action Plan Matrix',
         Icons.assignment,
       );
+    }
 
-    // Default Index (0) -> Core Overview Panels Stack Card views
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildActiveIncidentsPlaceholder(),
+        ActiveIncidentsSection(liveIncidents: _liveIncidents),
         const SizedBox(height: 16),
-        LeaderReportsLog(
+
+        //  Feeds the callback execution action handler cleanly across components
+        ReportsLogSection(
           reports: _reports,
-          onStatusChanged: (idx, status) =>
-              setState(() => _reports[idx]['status'] = status),
+          onValidateReport: (String id, String notice) {
+            submitReportValidationAction(id, notice);
+          },
         ),
       ],
-    );
-  }
-
-  Widget _buildActiveIncidentsPlaceholder() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF14171A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.orangeAccent,
-                size: 20,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'ACTIVE INCIDENTS',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 32),
-          Center(
-            child: Text(
-              'No current incidents reported.',
-              style: TextStyle(color: Colors.white38, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -205,13 +331,11 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
 
   Widget _buildBottomNav() {
     return NavigationBar(
-      selectedIndex: _bottomIndex > 2 ? 0 : _bottomIndex, // Ensures fallback highlight maps to Home safely during popups
+      selectedIndex: _bottomIndex > 1 ? 0 : _bottomIndex,
       onDestinationSelected: (idx) {
         if (idx == 2) {
-          // Trigger the stateful dialog popup interface directly
           _showAnnouncementWizard();
         } else if (idx == 3) {
-          // Route direct page navigation context straight over the account profile portal
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -273,7 +397,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<String>(
-                    initialValue: selectedIncident,
+                    value: selectedIncident,
                     isExpanded: true,
                     dropdownColor: const Color(0xFF14171A),
                     style: const TextStyle(color: Colors.white),

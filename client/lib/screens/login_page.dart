@@ -12,10 +12,7 @@ class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Account Access'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Account Access'), centerTitle: true),
       body: LayoutBuilder(
         builder: (context, constraints) {
           const padding = EdgeInsets.all(24.0);
@@ -74,14 +71,34 @@ class LoginPage extends StatelessWidget {
                       showLoginDialog(
                         context,
                         isLeader: true,
-                        onAuthSuccess: () {
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const LeaderDashboard(),
-                            ),
-                            (route) => false,
-                          );
+                        onAuthSuccess: () async {
+                          // MULTI-KEY SANITIZER GATEWAY:
+                          // Read all possible config keys immediately after authentication callback triggers
+                          final String storedName =
+                              await DatabaseHelper.instance.getConfig(
+                                'auth_community_name',
+                              ) ??
+                              await DatabaseHelper.instance.getConfig(
+                                'community_name',
+                              ) ??
+                              'Bruhejnya';
+
+                          // Explicitly strip away hidden carriage returns, \n, or trailing whitespace parameters
+                          final String cleanCommunityName = storedName.trim();
+
+                          if (context.mounted) {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                // DIRECT DATA HANDSHAKE: Passes the sanitized string value explicitly to the constructor,
+                                // completely bypassing async race conditions on disk!
+                                builder: (context) => LeaderDashboard(
+                                  communityFallback: cleanCommunityName,
+                                ),
+                              ),
+                              (route) => false,
+                            );
+                          }
                         },
                       );
                     },
@@ -108,12 +125,26 @@ class LoginPage extends StatelessWidget {
                         'auth_household_id',
                         '',
                       );
-                      await DatabaseHelper.instance.saveConfig('auth_leader_id', '');
+                      await DatabaseHelper.instance.saveConfig(
+                        'auth_leader_id',
+                        '',
+                      );
                       await DatabaseHelper.instance.saveConfig(
                         'household_last_name',
                         '',
                       );
-                      await DatabaseHelper.instance.saveConfig('household_count', '');
+                      await DatabaseHelper.instance.saveConfig(
+                        'household_count',
+                        '',
+                      );
+                      await DatabaseHelper.instance.saveConfig(
+                        'auth_community_name',
+                        '',
+                      );
+                      await DatabaseHelper.instance.saveConfig(
+                        'community_name',
+                        '',
+                      );
 
                       DatabaseHelper.instance.syncNotifier.value++;
 
@@ -127,7 +158,6 @@ class LoginPage extends StatelessWidget {
                                 fontWeight: FontWeight.normal,
                               ),
                             ),
-
                             backgroundColor: Colors.tealAccent.shade400,
                             duration: const Duration(seconds: 3),
                           ),
