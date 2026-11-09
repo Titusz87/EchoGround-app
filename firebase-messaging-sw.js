@@ -17,23 +17,42 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log("Background incident payload received: ", payload);
 
-  // --- ADDED: BROADCAST DATA TO FLUTTER APP IMMEDIATELY ON ARRIVAL ---
+  // Detect if the incoming metadata payload map is a community announcement broadcast
+  const isAnnouncement = payload.data && 
+                        (String(payload.data.type).includes("Announcement") || 
+                         String(payload.data.event_type).includes("Announcement"));
+
+  // --- BROADCAST DATA TO FLUTTER APP IMMEDIATELY ON ARRIVAL ---
   if (payload.data) {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       windowClients.forEach((windowClient) => {
-        // Sends a direct, instant background hardware message straight to web_listener.dart
-        windowClient.postMessage({
-          type: 'INCIDENT_CLICK', 
-          data: payload.data
-        });
+        
+        // Only send data downstream if it is a REAL incident alert,
+        // completely preventing announcements from generating report card duplicates!
+        if (!isAnnouncement) {
+          windowClient.postMessage({
+            type: 'INCIDENT_CLICK', 
+            data: payload.data
+          });
+        } else {
+          // Send an isolated message type so your app only updates the marquee variable
+          windowClient.postMessage({
+            type: 'ANNOUNCEMENT_ARRIVED',
+            data: payload.data
+          });
+        }
+        
       });
     });
   }
   // ------------------------------------------------------------------
 
-  const notificationTitle = payload.data.title || "Incident Alert";
+  // Extract the text safely based on your capitalized backend schema signatures
+  const notificationTitle = payload.data.title || payload.data.type || "Incident Alert";
+  const notificationBody = payload.data.Message || payload.data.body || "A local dataset has been updated.";
+
   const notificationOptions = {
-    body: payload.data.body || "A local dataset has been updated.",
+    body: notificationBody,
     icon: "/EchoGround-app/icons/Icon-192.png", 
     data: {
       url: payload.data.link || "/EchoGround-app/" 
