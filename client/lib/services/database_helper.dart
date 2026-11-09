@@ -76,6 +76,17 @@ class DatabaseHelper {
     ''');
   }
 
+  /// Updates the status value of an incident/report record inside the cache table
+  Future<int> updateNotificationStatus(String id, String status) async {
+    final db = await instance.database;
+    return await db.update(
+      'notifications', // Replace with your exact SQLite notification table name if different
+      {'status': status},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 3) {
       try {

@@ -89,22 +89,26 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     );
   }
 
+  /// Prioritizes local disk data rows to ensure 100% cross-device rendering alignment
   Future<void> _syncLeaderDashboardPipeline() async {
     if (!mounted) return;
     setState(() => _isNetworkLoading = true);
 
     try {
-      // 1. Extract your cached leader string ID from SQLite and parse it to an integer
       final String rawLeaderId =
           await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
       final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
 
-      // Extract text labels safely to populate your top description markers header card
-      final String rawCommunity =
-          await DatabaseHelper.instance.getConfig('auth_community_name') ??
-          await DatabaseHelper.instance.getConfig('community_name') ??
-          'Unknown Community';
-      final String currentCommunity = rawCommunity.trim();
+      String currentCommunity = _communityName;
+      if (widget.communityFallback == null ||
+          widget.communityFallback!.trim().isEmpty) {
+        final String rawCommunity =
+            await DatabaseHelper.instance.getConfig('auth_community_name') ??
+            await DatabaseHelper.instance.getConfig('community_name') ??
+            'Unknown Community';
+        currentCommunity = rawCommunity.trim();
+      }
+
       final String rawHouseholds =
           await DatabaseHelper.instance.getConfig(
             'community_households_count',
@@ -114,54 +118,67 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
           await DatabaseHelper.instance.getConfig('community_members_count') ??
           '1';
 
-      // MATCHES YOUR SWAGGER BLUEPRINT OVERLAYS EXACTLY
       final Map<String, int> requestPayload = {'id': parsedLeaderId};
 
-      // 2. Fetch Authoritative Official Incidents (Clean POST path with JSON body)
+      // 1. Dispatch background HTTP requests to refresh server counters status rows
       final incidentRes = await _executeAdaptivePost(
         '/community-leader/get-incidents',
         body: requestPayload,
       );
-
-      // 3. Refresh dynamic community report metrics and listings log entries
       final reportsRes = await _executeAdaptivePost(
         '/community-leader/refresh-dashboard',
         body: requestPayload,
       );
 
-      if (incidentRes.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(incidentRes.body);
-        if (data['incidents'] != null) {
-          _liveIncidents = List<Map<String, dynamic>>.from(data['incidents']);
-        }
-      }
+      int householdsUpdated = int.tryParse(rawHouseholds) ?? 1;
+      int membersUpdated = int.tryParse(rawMembers) ?? 1;
 
       if (reportsRes.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(reportsRes.body);
-        if (data['reports'] != null) {
-          _reports = List<Map<String, dynamic>>.from(data['reports']);
-        }
-
-        setState(() {
-          _communityName = currentCommunity;
-          _householdsCount = (data['households_count'] ?? rawHouseholds.trim())
-              .toString();
-          _membersCount = (data['members_count'] ?? rawMembers.trim())
-              .toString();
-        });
+        householdsUpdated = data['households_count'] ?? householdsUpdated;
+        membersUpdated = data['members_count'] ?? membersUpdated;
       }
-    } catch (e) {
-      debugPrint('Leader Offline Subsystem Activated: $e');
-      final allCached = await DatabaseHelper.instance.fetchAllNotifications();
+
+      // THE CRITICAL UI RENDERING HANDSHAKE LINK:
+      // Instead of relying on fluctuating online JSON keys shape formats, read rows straight from SQLite cache
+      // where the background synchronizer has already validated and saved the incoming data entries
+      final List<Map<String, dynamic>> allCachedRecords = await DatabaseHelper
+          .instance
+          .fetchAllNotifications();
+
       setState(() {
-        _liveIncidents = allCached
+        _communityName = currentCommunity;
+        _householdsCount = householdsUpdated.toString();
+        _membersCount = membersUpdated.toString();
+
+        // Populate Authoritative Incidents (exclusively items that are not unknown user logs)
+        _liveIncidents = allCachedRecords.where((item) {
+          final idStr = item['id']?.toString() ?? '';
+          return !idStr.startsWith('unknown_incident') &&
+              !idStr.contains('community_report');
+        }).toList();
+
+        // Populate User-Submitted Reports Feed items matching your household logs schema signatures
+        _reports = allCachedRecords.where((item) {
+          final idStr = item['id']?.toString() ?? '';
+          return idStr.startsWith('unknown_incident') ||
+              idStr.contains('community_report');
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('Leader Local Cache Engine Fallback: $e');
+      final List<Map<String, dynamic>> allCachedRecords = await DatabaseHelper
+          .instance
+          .fetchAllNotifications();
+      setState(() {
+        _liveIncidents = allCachedRecords
             .where(
               (item) =>
                   !(item['id']?.toString().startsWith('unknown_incident') ??
                       false),
             )
             .toList();
-        _reports = allCached
+        _reports = allCachedRecords
             .where(
               (item) =>
                   (item['id']?.toString().startsWith('unknown_incident') ??
@@ -174,7 +191,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     }
   }
 
-  /// 🛠️ CONNECTED REVIEWS PIPELINE ACTION: Dispatches PUT validations as structured inside Swagger
+  /// CONNECTED REVIEWS PIPELINE ACTION: Dispatches PUT validations as structured inside Swagger
   Future<void> submitReportValidationAction(
     String targetReportId,
     String broadcastNotice,
@@ -183,12 +200,13 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
         await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
     final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
 
-    // 🛠️ PUT BLUEPRINT SCHEMA MAPPING
+    // 🎯 STRIP ALL NON-DIGITS: Converts "unknown_incident_1794199187634" into "1794199187634"
+    final String numericIdOnly = targetReportId.replaceAll(RegExp(r'\D'), '');
+
+    // 🛠️ SWAGGER COMPLIANT PAYLOAD USING THE NUMERIC EXTRACT STRING
     final Map<String, dynamic> validationPayload = {
       'id': parsedLeaderId,
-      'validated_incidents': [
-        targetReportId,
-      ], // Target tracking unique string nested inside array
+      'validated_incidents': [numericIdOnly],
       'notice': broadcastNotice.trim().isNotEmpty
           ? broadcastNotice.trim()
           : 'Verified by sector community leader.',
@@ -216,8 +234,23 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
               .timeout(const Duration(seconds: 4));
 
           if (response.statusCode == 200) {
-            // Re-sync local states immediately to flash color updates in real time!
-            _syncLeaderDashboardPipeline();
+            debugPrint('✅ VALIDATION PASSED');
+
+            // 🎯 INSTANT LOCAL STATE MUTATION: Modifies the list state matching variables immediately
+            // without waiting for an external network push request bounce back!
+            setState(() {
+              for (var report in _reports) {
+                if (report['id']?.toString() == targetReportId) {
+                  report['status'] = 'validated'; // Triggers clean light green card decoration styles instantly
+                }
+              }
+            });
+
+            // Write the local cache change down onto the database node to lock it in permanently
+            await DatabaseHelper.instance.updateNotificationStatus(
+              targetReportId,
+              'validated',
+            );
             break;
           }
         } catch (_) {}
@@ -243,7 +276,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
               ),
             )
           : ValueListenableBuilder<int>(
-              // 🎯 THE LIVE LISTENING GATEWAY: Listens directly to incoming background dataset mutations!
+              // THE LIVE LISTENING GATEWAY: Listens directly to incoming background dataset mutations!
               valueListenable: DatabaseHelper.instance.syncNotifier,
               builder: (context, syncCount, _) {
                 return FutureBuilder<Map<String, String>>(
@@ -480,7 +513,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     );
   }
 
-  /// 🛠️ FIXED: Re-establishes the missing stats loader method for the build frame loop
+  /// Re-establishes the missing stats loader method for the build frame loop
   Future<Map<String, String>> _loadCommunityStats() async {
     return {
       'name': _communityName,
