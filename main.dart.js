@@ -51121,7 +51121,6 @@ akF(a,b){var s=0,r=A.w(t.Wd),q,p=2,o=[],n,m,l,k,j,i,h,g,f,e,d,c
 var $async$xq=A.x(function(a0,a1){if(a0===1){o.push(a1)
 s=p}for(;;)switch(s){case 0:d=A.b([],t.s)
 d.push(u.V)
-d.push("http://127.0.0.1:8000")
 n=null
 j=d.length,i=t.N,h=0
 case 3:if(!(h<d.length)){s=5
@@ -51143,7 +51142,7 @@ break
 case 7:p=6
 c=o.pop()
 k=A.a2(c)
-A.ml().$1("ECO NETWORK: Skipping node "+A.k(m)+" due to connection fault: "+A.k(k))
+A.ml().$1("ECO NETWORK: Skipping node "+A.k(m)+" due to fault: "+A.k(k))
 s=9
 break
 case 6:s=2
