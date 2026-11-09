@@ -21,23 +21,37 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   int _bottomIndex = 0;
   bool _isNetworkLoading = false;
 
-  static const String _backendBaseUrl = String.fromEnvironment('BACKEND_URL');
-
   List<Map<String, dynamic>> _liveIncidents = [];
   List<Map<String, dynamic>> _reports = [];
 
-  String _communityName = 'Unknown Community';
+  String _communityName = 'Bruhyna';
   String _householdsCount = '1';
   String _membersCount = '1';
 
   @override
   void initState() {
     super.initState();
-    if (widget.communityFallback != null &&
-        widget.communityFallback!.trim().isNotEmpty) {
-      _communityName = widget.communityFallback!.trim();
+    _initializeDashboardState();
+  }
+
+  /// Recovers persistent community state labels before running data pipes
+  Future<void> _initializeDashboardState() async {
+    final String savedComm =
+        await DatabaseHelper.instance.getConfig('auth_community_name') ??
+        await DatabaseHelper.instance.getConfig('community_name') ??
+        '';
+
+    if (mounted) {
+      setState(() {
+        if (widget.communityFallback != null &&
+            widget.communityFallback!.trim().isNotEmpty) {
+          _communityName = widget.communityFallback!.trim();
+        } else if (savedComm.trim().isNotEmpty) {
+          _communityName = savedComm.trim();
+        }
+      });
+      _syncLeaderDashboardPipeline();
     }
-    _syncLeaderDashboardPipeline();
   }
 
   Future<http.Response> _executeAdaptivePost(
@@ -45,14 +59,9 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     Object? body,
   }) async {
     const String injectedBaseUrl = String.fromEnvironment('BACKEND_URL');
-
     final List<String> targetBaseUrls = [
-      // Option 1: Prioritize the live cloud environment if configured
       if (injectedBaseUrl.isNotEmpty) injectedBaseUrl,
-
-      // Only attempt the local fallback port if we are running a local debug layout session,
-      // avoiding Cross-Origin blocks completely in live browser deployments!
-      if (injectedBaseUrl.isEmpty) 'http://127.0.0.1:8000',
+      'http://127.0.0.1:8000',
     ];
 
     http.Response? finalResponse;
@@ -71,40 +80,19 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
             .timeout(const Duration(seconds: 4));
 
         if (finalResponse.statusCode == 200) {
-          debugPrint(
-            'ECO NETWORK: Connected successfully via node: $cleanBaseUrl',
-          );
           return finalResponse;
         }
-      } catch (err) {
-        debugPrint('ECO NETWORK: Skipping node $baseUrl due to fault: $err');
-      }
+      } catch (_) {}
     }
     if (finalResponse != null) return finalResponse;
-    throw Exception(
-      'Adaptive system network configuration routing parameters exhausted.',
-    );
+    throw Exception('Adaptive connection routing parameters exhausted.');
   }
 
-  /// Prioritizes local disk data rows to ensure 100% cross-device rendering alignment
   Future<void> _syncLeaderDashboardPipeline() async {
-    if (!mounted) return;
-    setState(() => _isNetworkLoading = true);
-
     try {
       final String rawLeaderId =
           await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
       final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
-
-      String currentCommunity = _communityName;
-      if (widget.communityFallback == null ||
-          widget.communityFallback!.trim().isEmpty) {
-        final String rawCommunity =
-            await DatabaseHelper.instance.getConfig('auth_community_name') ??
-            await DatabaseHelper.instance.getConfig('community_name') ??
-            'Unknown Community';
-        currentCommunity = rawCommunity.trim();
-      }
 
       final String rawHouseholds =
           await DatabaseHelper.instance.getConfig(
@@ -117,7 +105,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
 
       final Map<String, int> requestPayload = {'id': parsedLeaderId};
 
-      // 1. Dispatch background HTTP requests to refresh server counters status rows
+      // Background telemetry sync updates
       final incidentRes = await _executeAdaptivePost(
         '/community-leader/get-incidents',
         body: requestPayload,
@@ -136,59 +124,54 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
         membersUpdated = data['members_count'] ?? membersUpdated;
       }
 
-      // THE CRITICAL UI RENDERING HANDSHAKE LINK:
-      // Instead of relying on fluctuating online JSON keys shape formats, read rows straight from SQLite cache
-      // where the background synchronizer has already validated and saved the incoming data entries
       final List<Map<String, dynamic>> allCachedRecords = await DatabaseHelper
           .instance
           .fetchAllNotifications();
 
-      setState(() {
-        _communityName = currentCommunity;
-        _householdsCount = householdsUpdated.toString();
-        _membersCount = membersUpdated.toString();
+      if (mounted) {
+        setState(() {
+          _householdsCount = householdsUpdated.toString();
+          _membersCount = membersUpdated.toString();
 
-        // Populate Authoritative Incidents (exclusively items that are not unknown user logs)
-        _liveIncidents = allCachedRecords.where((item) {
-          final idStr = item['id']?.toString() ?? '';
-          return !idStr.startsWith('unknown_incident') &&
-              !idStr.contains('community_report');
-        }).toList();
+          _liveIncidents = allCachedRecords.where((item) {
+            final idStr = item['id']?.toString() ?? '';
+            return !idStr.startsWith('unknown_incident') &&
+                !idStr.contains('community_report');
+          }).toList();
 
-        // Populate User-Submitted Reports Feed items matching your household logs schema signatures
-        _reports = allCachedRecords.where((item) {
-          final idStr = item['id']?.toString() ?? '';
-          return idStr.startsWith('unknown_incident') ||
-              idStr.contains('community_report');
-        }).toList();
-      });
+          _reports = allCachedRecords.where((item) {
+            final idStr = item['id']?.toString() ?? '';
+            return idStr.startsWith('unknown_incident') ||
+                idStr.contains('community_report');
+          }).toList();
+        });
+      }
     } catch (e) {
-      debugPrint('Leader Local Cache Engine Fallback: $e');
+      debugPrint('Sync Fallback: $e');
       final List<Map<String, dynamic>> allCachedRecords = await DatabaseHelper
           .instance
           .fetchAllNotifications();
-      setState(() {
-        _liveIncidents = allCachedRecords
-            .where(
-              (item) =>
-                  !(item['id']?.toString().startsWith('unknown_incident') ??
-                      false),
-            )
-            .toList();
-        _reports = allCachedRecords
-            .where(
-              (item) =>
-                  (item['id']?.toString().startsWith('unknown_incident') ??
-                  false),
-            )
-            .toList();
-      });
-    } finally {
-      if (mounted) setState(() => _isNetworkLoading = false);
+      if (mounted) {
+        setState(() {
+          _liveIncidents = allCachedRecords
+              .where(
+                (item) =>
+                    !(item['id']?.toString().startsWith('unknown_incident') ??
+                        false),
+              )
+              .toList();
+          _reports = allCachedRecords
+              .where(
+                (item) =>
+                    (item['id']?.toString().startsWith('unknown_incident') ??
+                    false),
+              )
+              .toList();
+        });
+      }
     }
   }
 
-  /// CONNECTED REVIEWS PIPELINE ACTION: Dispatches PUT validations as structured inside Swagger
   Future<void> submitReportValidationAction(
     String targetReportId,
     String broadcastNotice,
@@ -196,7 +179,6 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     final String rawLeaderId =
         await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
     final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
-
     final String numericIdOnly = targetReportId.replaceAll(RegExp(r'\D'), '');
 
     final Map<String, dynamic> validationPayload = {
@@ -211,7 +193,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
       const String injectedBaseUrl = String.fromEnvironment('BACKEND_URL');
       final List<String> targetBaseUrls = [
         if (injectedBaseUrl.isNotEmpty) injectedBaseUrl,
-        if (injectedBaseUrl.isEmpty) 'http://127.0.0.1:8000',
+        'http://127.0.0.1:8000',
       ];
 
       for (String baseUrl in targetBaseUrls) {
@@ -229,33 +211,34 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
               .timeout(const Duration(seconds: 4));
 
           if (response.statusCode == 200) {
-            debugPrint('✅ VALIDATION PASSED');
-
-            // Paint validation color status changes on local views instantly
-            setState(() {
-              for (var report in _reports) {
-                if (report['id']?.toString() == targetReportId) {
-                  report['status'] = 'validated';
-                }
-              }
-            });
-
-            // Write change to local cache permanently
+            // 🎯 FIXED MUTATION HARMONY: Update local memory + modify raw SQLite data fields cleanly
             final db = await DatabaseHelper.instance.database;
             await db.execute(
               "UPDATE notifications SET status = 'validated' WHERE id = ?",
               [targetReportId],
             );
+            await db.execute(
+              "UPDATE notifications SET is_validated = 1 WHERE id = ?",
+              [targetReportId],
+            );
 
-            // Force dynamic rebuild trigger pass
+            // Notify all listenable layouts to repaint simultaneously
             DatabaseHelper.instance.syncNotifier.value++;
             break;
           }
         } catch (_) {}
       }
     } catch (e) {
-      debugPrint('Validation submission fault error: $e');
+      debugPrint('Validation submission error: $e');
     }
+  }
+
+  Future<Map<String, String>> _loadCommunityStats() async {
+    return {
+      'name': _communityName,
+      'households': _householdsCount,
+      'members': _membersCount,
+    };
   }
 
   @override
@@ -274,9 +257,12 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
               ),
             )
           : ValueListenableBuilder<int>(
-              // THE LIVE LISTENING GATEWAY: Listens directly to incoming background dataset mutations!
+              // 🎯 FIXED INSTANT RENDERING: Forces reactive rebuilding on incoming real-time notifications
               valueListenable: DatabaseHelper.instance.syncNotifier,
-              builder: (context, syncCount, _) {
+              builder: (context, syncValue, _) {
+                // Auto-refresh data arrays when changes occur
+                _syncLeaderDashboardPipeline();
+
                 return FutureBuilder<Map<String, String>>(
                   future: _loadCommunityStats(),
                   builder: (context, snapshot) {
@@ -327,8 +313,6 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
       children: [
         ActiveIncidentsSection(liveIncidents: _liveIncidents),
         const SizedBox(height: 16),
-
-        //  Feeds the callback execution action handler cleanly across components
         ReportsLogSection(
           reports: _reports,
           onValidateReport: (String id, String notice) {
@@ -420,7 +404,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     String? selectedIncident;
     final textController = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    final List<String> options = [
+    final List options = [
       'Active Bushfire Alert (Northeast)',
       'Roebuck Bay Flash Flood Event',
       'Regional Severe Thunderstorm Advisory',
@@ -454,7 +438,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
                     ),
                     items: options
                         .map(
-                          (e) => DropdownMenuItem(
+                          (e) => DropdownMenuItem<String>(
                             value: e,
                             child: Text(e, overflow: TextOverflow.ellipsis),
                           ),
@@ -509,14 +493,5 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
         ),
       ),
     );
-  }
-
-  /// Re-establishes the missing stats loader method for the build frame loop
-  Future<Map<String, String>> _loadCommunityStats() async {
-    return {
-      'name': _communityName,
-      'households': _householdsCount,
-      'members': _membersCount,
-    };
   }
 }
