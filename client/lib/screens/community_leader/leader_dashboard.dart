@@ -197,10 +197,8 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
         await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
     final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
 
-    // 🎯 STRIP ALL NON-DIGITS: Converts "unknown_incident_1794199187634" into "1794199187634"
     final String numericIdOnly = targetReportId.replaceAll(RegExp(r'\D'), '');
 
-    // 🛠️ SWAGGER COMPLIANT PAYLOAD USING THE NUMERIC EXTRACT STRING
     final Map<String, dynamic> validationPayload = {
       'id': parsedLeaderId,
       'validated_incidents': [numericIdOnly],
@@ -213,7 +211,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
       const String injectedBaseUrl = String.fromEnvironment('BACKEND_URL');
       final List<String> targetBaseUrls = [
         if (injectedBaseUrl.isNotEmpty) injectedBaseUrl,
-        'http://127.0.0.1:8000',
+        if (injectedBaseUrl.isEmpty) 'http://127.0.0.1:8000',
       ];
 
       for (String baseUrl in targetBaseUrls) {
@@ -233,21 +231,24 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
           if (response.statusCode == 200) {
             debugPrint('✅ VALIDATION PASSED');
 
-            // 🎯 INSTANT LOCAL STATE MUTATION: Modifies the list state matching variables immediately
-            // without waiting for an external network push request bounce back!
+            // Paint validation color status changes on local views instantly
             setState(() {
               for (var report in _reports) {
                 if (report['id']?.toString() == targetReportId) {
-                  report['status'] = 'validated'; // Triggers clean light green card decoration styles instantly
+                  report['status'] = 'validated';
                 }
               }
             });
 
-            // Write the local cache change down onto the database node to lock it in permanently
-            await DatabaseHelper.instance.updateNotificationStatus(
-              targetReportId,
-              'validated',
+            // Write change to local cache permanently
+            final db = await DatabaseHelper.instance.database;
+            await db.execute(
+              "UPDATE notifications SET status = 'validated' WHERE id = ?",
+              [targetReportId],
             );
+
+            // Force dynamic rebuild trigger pass
+            DatabaseHelper.instance.syncNotifier.value++;
             break;
           }
         } catch (_) {}
