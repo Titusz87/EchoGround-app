@@ -306,6 +306,15 @@ void showLoginDialog(
                               );
                             }
                             if (success) {
+                              // Commit the household session before opening its dashboard.
+                              // Registration does not currently persist this key in AuthService.
+                              if (!isLeader) {
+                                await DatabaseHelper.instance.saveConfig(
+                                  'auth_household_id',
+                                  parsedId.toString(),
+                                );
+                              }
+                              if (!context.mounted) return;
                               Navigator.of(context).pop();
                               onAuthSuccess();
                             } else {
