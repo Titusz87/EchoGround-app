@@ -140,6 +140,34 @@ class NotificationService {
 
           print('Foreground dataset update received and sanitized: $cleanData');
 
+          // 1. ANNOUNCEMENT INTERCEPTOR & FILTER FILTER MODULE
+          final String typeStr = (cleanData['type'] ?? '').toString();
+          if (typeStr.contains('Announcement')) {
+            // Extracts the correct CAPITALIZED key matching backend log payload model
+            final String? incomingBody =
+                cleanData['Message']?.toString() ??
+                cleanData['body']?.toString() ??
+                cleanData['message']?.toString();
+
+            if (incomingBody != null) {
+              // Permanently persist the clean announcement text message right into  SQLite device configuration keys
+              await DatabaseHelper.instance.saveConfig(
+                'last_live_announcement',
+                incomingBody.trim(),
+              );
+
+              // Force fire the system listener notifier to paint the text marquee bar across screens
+              DatabaseHelper.instance.syncNotifier.value++;
+              print(
+                "🎯 ANNOUNCEMENT FILTER ENGAGED: Wiped out report card duplicate and updated banner keys to: $incomingBody",
+              );
+            }
+
+            // CRITICAL EXIT HANDSHAKE: Aborts the function chain right here so it NEVER drops below
+            // to generate a report tile inside your dashboard data tables layout grid!
+            return;
+          }
+
           // DYNAMIC VALIDATION INTERCEPTOR HOOK
           // Extracts the numeric ID fragment pushed out from your backend FCM real-time module
           final dynamic validatedId =
@@ -169,7 +197,7 @@ class NotificationService {
                 // Fire the listenable notifier system to paint the green chip overlays on the Household view
                 DatabaseHelper.instance.syncNotifier.value++;
                 print(
-                  "🎯 REAL-TIME RECOVERY HANDSHAKE: Mutated status for cache row $currentId to 'validated'.",
+                  " REAL-TIME RECOVERY HANDSHAKE: Mutated status for cache row $currentId to 'validated'.",
                 );
                 break;
               }
@@ -181,6 +209,7 @@ class NotificationService {
             final snackBarText =
                 cleanData['body']?.toString() ??
                 cleanData['message']?.toString() ??
+                cleanData['Message']?.toString() ?? // Fallback to capitalized if snackbar needs to draw it
                 'New Incident Updated Nearby!';
 
             ScaffoldMessenger.of(context).showSnackBar(
