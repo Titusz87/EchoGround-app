@@ -44,21 +44,20 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     String endpointPath, {
     Object? body,
   }) async {
-    // Read the compiled build flag first
     const String injectedBaseUrl = String.fromEnvironment('BACKEND_URL');
 
     final List<String> targetBaseUrls = [
-      // Option 1: Prioritize the dynamic deployment environment string if provided
+      // Option 1: Prioritize the live cloud environment if configured
       if (injectedBaseUrl.isNotEmpty) injectedBaseUrl,
 
-      // Option 2: Fall back to local machine loop for internal testing
-      'http://127.0.0.1:8000',
+      // Only attempt the local fallback port if we are running a local debug layout session,
+      // avoiding Cross-Origin blocks completely in live browser deployments!
+      if (injectedBaseUrl.isEmpty) 'http://127.0.0.1:8000',
     ];
 
     http.Response? finalResponse;
     for (String baseUrl in targetBaseUrls) {
       try {
-        // Automatically strips trailing slashes to prevent malformed '//' route lines pathing errors
         final cleanBaseUrl = baseUrl.endsWith('/')
             ? baseUrl.substring(0, baseUrl.length - 1)
             : baseUrl;
@@ -78,9 +77,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
           return finalResponse;
         }
       } catch (err) {
-        debugPrint(
-          'ECO NETWORK: Skipping node $baseUrl due to connection fault: $err',
-        );
+        debugPrint('ECO NETWORK: Skipping node $baseUrl due to fault: $err');
       }
     }
     if (finalResponse != null) return finalResponse;
