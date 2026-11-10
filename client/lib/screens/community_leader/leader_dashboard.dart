@@ -22,8 +22,6 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   int _bottomIndex = 0;
   bool _isNetworkLoading = false;
 
-  static const String _backendBaseUrl = String.fromEnvironment('BACKEND_URL');
-
   List<Map<String, dynamic>> _liveIncidents = [];
   List<Map<String, dynamic>> _reports = [];
 
@@ -34,32 +32,42 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   @override
   void initState() {
     super.initState();
-    if (widget.communityFallback != null &&
-        widget.communityFallback!.trim().isNotEmpty) {
-      _communityName = widget.communityFallback!.trim();
+    _initializeDashboardState();
+  }
+
+  /// Recovers persistent community state labels before running data pipes
+  Future<void> _initializeDashboardState() async {
+    final String savedComm =
+        await DatabaseHelper.instance.getConfig('auth_community_name') ??
+        await DatabaseHelper.instance.getConfig('community_name') ??
+        '';
+
+    if (mounted) {
+      setState(() {
+        if (widget.communityFallback != null &&
+            widget.communityFallback!.trim().isNotEmpty) {
+          _communityName = widget.communityFallback!.trim();
+        } else if (savedComm.trim().isNotEmpty) {
+          _communityName = savedComm.trim();
+        }
+      });
+      _syncLeaderDashboardPipeline();
     }
-    _syncLeaderDashboardPipeline();
   }
 
   Future<http.Response> _executeAdaptivePost(
     String endpointPath, {
     Object? body,
   }) async {
-    // Read the compiled build flag first
     const String injectedBaseUrl = String.fromEnvironment('BACKEND_URL');
-
     final List<String> targetBaseUrls = [
-      // Option 1: Prioritize the dynamic deployment environment string if provided
       if (injectedBaseUrl.isNotEmpty) injectedBaseUrl,
-
-      // Option 2: Fall back to local machine loop for internal testing
       'http://127.0.0.1:8000',
     ];
 
     http.Response? finalResponse;
     for (String baseUrl in targetBaseUrls) {
       try {
-        // Automatically strips trailing slashes to prevent malformed '//' route lines pathing errors
         final cleanBaseUrl = baseUrl.endsWith('/')
             ? baseUrl.substring(0, baseUrl.length - 1)
             : baseUrl;
@@ -73,39 +81,20 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
             .timeout(const Duration(seconds: 4));
 
         if (finalResponse.statusCode == 200) {
-          debugPrint(
-            'ECO NETWORK: Connected successfully via node: $cleanBaseUrl',
-          );
           return finalResponse;
         }
-      } catch (err) {
-        debugPrint(
-          'ECO NETWORK: Skipping node $baseUrl due to connection fault: $err',
-        );
-      }
+      } catch (_) {}
     }
     if (finalResponse != null) return finalResponse;
-    throw Exception(
-      'Adaptive system network configuration routing parameters exhausted.',
-    );
+    throw Exception('Adaptive connection routing parameters exhausted.');
   }
 
   Future<void> _syncLeaderDashboardPipeline() async {
-    if (!mounted) return;
-    setState(() => _isNetworkLoading = true);
-
     try {
-      // 1. Extract your cached leader string ID from SQLite and parse it to an integer
       final String rawLeaderId =
           await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
       final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
 
-      // Extract text labels safely to populate your top description markers header card
-      final String rawCommunity =
-          await DatabaseHelper.instance.getConfig('auth_community_name') ??
-          await DatabaseHelper.instance.getConfig('community_name') ??
-          'Unknown Community';
-      final String currentCommunity = rawCommunity.trim();
       final String rawHouseholds =
           await DatabaseHelper.instance.getConfig(
             'community_households_count',
@@ -115,67 +104,88 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
           await DatabaseHelper.instance.getConfig('community_members_count') ??
           '1';
 
-      // MATCHES YOUR SWAGGER BLUEPRINT OVERLAYS EXACTLY
       final Map<String, int> requestPayload = {'id': parsedLeaderId};
 
-      // 2. Fetch Authoritative Official Incidents (Clean POST path with JSON body)
+      // Background telemetry sync updates
       final incidentRes = await _executeAdaptivePost(
         '/community-leader/get-incidents',
         body: requestPayload,
       );
-
-      // 3. Refresh dynamic community report metrics and listings log entries
       final reportsRes = await _executeAdaptivePost(
         '/community-leader/refresh-dashboard',
         body: requestPayload,
       );
 
-      if (incidentRes.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(incidentRes.body);
-        if (data['incidents'] != null) {
-          _liveIncidents = List<Map<String, dynamic>>.from(data['incidents']);
-        }
-      }
+      int householdsUpdated = int.tryParse(rawHouseholds) ?? 1;
+      int membersUpdated = int.tryParse(rawMembers) ?? 1;
 
       if (reportsRes.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(reportsRes.body);
-        if (data['reports'] != null) {
-          _reports = List<Map<String, dynamic>>.from(data['reports']);
-        }
+        householdsUpdated = data['households_count'] ?? householdsUpdated;
+        membersUpdated = data['members_count'] ?? membersUpdated;
+      }
 
+      final List<Map<String, dynamic>> allCachedRecords = await DatabaseHelper
+          .instance
+          .fetchAllNotifications();
+
+      if (mounted) {
         setState(() {
-          _communityName = currentCommunity;
-          _householdsCount = (data['households_count'] ?? rawHouseholds.trim())
-              .toString();
-          _membersCount = (data['members_count'] ?? rawMembers.trim())
-              .toString();
+          _householdsCount = householdsUpdated.toString();
+          _membersCount = membersUpdated.toString();
+
+          // FILTER 1: Exclude both reports AND announcements from official incident cards
+          _liveIncidents = allCachedRecords.where((item) {
+            final idStr = item['id']?.toString() ?? '';
+            final typeStr = (item['event_type'] ?? item['type'] ?? '')
+                .toString();
+
+            return !idStr.startsWith('unknown_incident') &&
+                !idStr.contains('community_report') &&
+                !typeStr.contains('Announcement');
+          }).toList();
+
+          // FILTER 2: Populate ONLY authentic user reports, explicitly blocking announcements
+          _reports = allCachedRecords.where((item) {
+            final idStr = item['id']?.toString() ?? '';
+            final typeStr = (item['event_type'] ?? item['type'] ?? '')
+                .toString();
+
+            final bool isReportRow =
+                idStr.startsWith('unknown_incident') ||
+                idStr.contains('community_report');
+            final bool isAnnouncement = typeStr.contains('Announcement');
+
+            return isReportRow && !isAnnouncement;
+          }).toList();
         });
       }
     } catch (e) {
-      debugPrint('Leader Offline Subsystem Activated: $e');
-      final allCached = await DatabaseHelper.instance.fetchAllNotifications();
-      setState(() {
-        _liveIncidents = allCached
-            .where(
-              (item) =>
-                  !(item['id']?.toString().startsWith('unknown_incident') ??
-                      false),
-            )
-            .toList();
-        _reports = allCached
-            .where(
-              (item) =>
-                  (item['id']?.toString().startsWith('unknown_incident') ??
-                  false),
-            )
-            .toList();
-      });
-    } finally {
-      if (mounted) setState(() => _isNetworkLoading = false);
+      debugPrint('Sync Fallback: $e');
+      final List<Map<String, dynamic>> allCachedRecords = await DatabaseHelper
+          .instance
+          .fetchAllNotifications();
+      if (mounted) {
+        setState(() {
+          _liveIncidents = allCachedRecords
+              .where(
+                (item) =>
+                    !(item['id']?.toString().startsWith('unknown_incident') ??
+                        false),
+              )
+              .toList();
+          _reports = allCachedRecords
+              .where(
+                (item) =>
+                    (item['id']?.toString().startsWith('unknown_incident') ??
+                    false),
+              )
+              .toList();
+        });
+      }
     }
   }
 
-  /// 🛠️ CONNECTED REVIEWS PIPELINE ACTION: Dispatches PUT validations as structured inside Swagger
   Future<void> submitReportValidationAction(
     String targetReportId,
     String broadcastNotice,
@@ -183,13 +193,11 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     final String rawLeaderId =
         await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
     final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
+    final String numericIdOnly = targetReportId.replaceAll(RegExp(r'\D'), '');
 
-    // 🛠️ PUT BLUEPRINT SCHEMA MAPPING
     final Map<String, dynamic> validationPayload = {
       'id': parsedLeaderId,
-      'validated_incidents': [
-        targetReportId,
-      ], // Target tracking unique string nested inside array
+      'validated_incidents': [numericIdOnly],
       'notice': broadcastNotice.trim().isNotEmpty
           ? broadcastNotice.trim()
           : 'Verified by sector community leader.',
@@ -217,15 +225,34 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
               .timeout(const Duration(seconds: 4));
 
           if (response.statusCode == 200) {
-            // Re-sync local states immediately to flash color updates in real time!
-            _syncLeaderDashboardPipeline();
+            // 🎯 FIXED MUTATION HARMONY: Update local memory + modify raw SQLite data fields cleanly
+            final db = await DatabaseHelper.instance.database;
+            await db.execute(
+              "UPDATE notifications SET status = 'validated' WHERE id = ?",
+              [targetReportId],
+            );
+            await db.execute(
+              "UPDATE notifications SET is_validated = 1 WHERE id = ?",
+              [targetReportId],
+            );
+
+            // Notify all listenable layouts to repaint simultaneously
+            DatabaseHelper.instance.syncNotifier.value++;
             break;
           }
         } catch (_) {}
       }
     } catch (e) {
-      debugPrint('Validation submission fault error: $e');
+      debugPrint('Validation submission error: $e');
     }
+  }
+
+  Future<Map<String, String>> _loadCommunityStats() async {
+    return {
+      'name': _communityName,
+      'households': _householdsCount,
+      'members': _membersCount,
+    };
   }
 
   @override
@@ -243,26 +270,45 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4DB6AC)),
               ),
             )
-          : RefreshIndicator(
-              onRefresh: _syncLeaderDashboardPipeline,
-              color: const Color(0xFF4DB6AC),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    LeaderStatsHeader(
-                      communityName: _communityName,
-                      householdsCount: _householdsCount,
-                      membersCount: _membersCount,
-                    ),
-                    const SizedBox(height: 24),
-                    _buildDynamicBodyContent(),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
+          : ValueListenableBuilder<int>(
+              // Forces reactive rebuilding on incoming real-time notifications
+              valueListenable: DatabaseHelper.instance.syncNotifier,
+              builder: (context, syncValue, _) {
+                // Auto-refresh data arrays when changes occur
+                _syncLeaderDashboardPipeline();
+
+                return FutureBuilder<Map<String, String>>(
+                  future: _loadCommunityStats(),
+                  builder: (context, snapshot) {
+                    final name = snapshot.data?['name'] ?? _communityName;
+                    final households =
+                        snapshot.data?['households'] ?? _householdsCount;
+                    final members = snapshot.data?['members'] ?? _membersCount;
+
+                    return RefreshIndicator(
+                      onRefresh: _syncLeaderDashboardPipeline,
+                      color: const Color(0xFF4DB6AC),
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            LeaderStatsHeader(
+                              communityName: name,
+                              householdsCount: households,
+                              membersCount: members,
+                            ),
+                            const SizedBox(height: 24),
+                            _buildDynamicBodyContent(),
+                            const SizedBox(height: 24),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
       bottomNavigationBar: _buildBottomNav(),
     );
@@ -276,8 +322,6 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
       children: [
         ActiveIncidentsSection(liveIncidents: _liveIncidents),
         const SizedBox(height: 16),
-
-        //  Feeds the callback execution action handler cleanly across components
         ReportsLogSection(
           reports: _reports,
           onValidateReport: (String id, String notice) {
@@ -365,97 +409,228 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     );
   }
 
-  void _showAnnouncementWizard() {
-    String? selectedIncident;
+  void _showAnnouncementWizard() async {
+    // Local state managers
+    Map<String, String>? selectedLinkedEntity;
     final textController = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    final List<String> options = [
-      'Active Bushfire Alert (Northeast)',
-      'Roebuck Bay Flash Flood Event',
-      'Regional Severe Thunderstorm Advisory',
-    ];
+
+    List<Map<String, String>> dropdownOptions = [];
+    bool isDropdownLoading = true;
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
-          backgroundColor: const Color(0xFF14171A),
-          title: const Text(
-            'Publish Community Broadcast',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          content: SizedBox(
-            width: 460,
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    value: selectedIncident,
-                    isExpanded: true,
-                    dropdownColor: const Color(0xFF14171A),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      labelText: 'Target Incident Link',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: options
-                        .map(
-                          (e) => DropdownMenuItem(
-                            value: e,
-                            child: Text(e, overflow: TextOverflow.ellipsis),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setModalState(() => selectedIncident = v),
-                    validator: (v) => v == null ? 'Required field' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: textController,
-                    maxLines: 4,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Type announcement message...',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) =>
-                        v == null || v.trim().isEmpty ? 'Required field' : null,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.white38),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4DB6AC),
-                foregroundColor: const Color(0xFF14171A),
-              ),
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Broadcast sent.'),
-                      backgroundColor: Colors.teal,
-                    ),
-                  );
+        builder: (context, setModalState) {
+          // BACKGROUND WORKER: Pulls live cached records the millisecond the sheet opens on screen
+          if (isDropdownLoading) {
+            () async {
+              try {
+                final List<Map<String, dynamic>> allCachedRecords =
+                    await DatabaseHelper.instance.fetchAllNotifications();
+                final List<Map<String, String>> populatedOptions = [];
+
+                for (var item in allCachedRecords) {
+                  final String currentId = item['id']?.toString() ?? '';
+                  final String rawType =
+                      (item['event_type'] ?? item['type'] ?? '').toString();
+                  final String rawTitle =
+                      (item['title'] ?? item['description'] ?? 'Alert')
+                          .toString();
+
+                  // Format descriptive visual anchors to match your precise "incident-title" or "report-title" requirement
+                  if (currentId.startsWith('unknown_incident') ||
+                      currentId.contains('community_report')) {
+                    // It's a citizen-submitted report: map its localized title text parameters
+                    populatedOptions.add({
+                      'id': currentId,
+                      'display': 'REPORT - ${rawTitle.toUpperCase()}',
+                    });
+                  } else {
+                    // It's an official verified community incident: map its event category type fields
+                    populatedOptions.add({
+                      'id': currentId,
+                      'display': 'INCIDENT - ${rawType.toUpperCase()}',
+                    });
+                  }
                 }
-              },
-              child: const Text('Send Broadcast'),
+
+                setModalState(() {
+                  dropdownOptions = populatedOptions;
+                  isDropdownLoading = false;
+                });
+              } catch (e) {
+                debugPrint(
+                  'Failed to populate live wizard option dropdown maps: $e',
+                );
+                setModalState(() => isDropdownLoading = false);
+              }
+            }();
+          }
+
+          /// BROADCAST ROUTINE DISPATCHER
+          Future<void> dispatchLiveBroadcastNotification() async {
+            if (!formKey.currentState!.validate()) return;
+
+            final String rawLeaderId =
+                await DatabaseHelper.instance.getConfig('auth_leader_id') ??
+                '1';
+            final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
+
+            // Build the string text message body. Include the linked entity identifier if one was selected
+            String finalBroadcastMessage = textController.text.trim();
+            if (selectedLinkedEntity != null) {
+              finalBroadcastMessage +=
+                  '\n\n[Linked Context: ${selectedLinkedEntity!['display']}]';
+            }
+
+            // SWAGGER BLUEPRINT ALIGNED SCHEMA PAYLOAD MODEL
+            final Map<String, dynamic> broadcastPayload = {
+              'id': parsedLeaderId,
+              'body': finalBroadcastMessage,
+            };
+
+            try {
+              // Dispatch clean post request payload out to live server address nodes
+              final response = await _executeAdaptivePost(
+                '/community-leader/publish-notification',
+                body: broadcastPayload,
+              );
+
+              if (response.statusCode == 200) {
+                if (context.mounted) Navigator.pop(context);
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Announcement broadcast sent via FCM successfully.',
+                    ),
+                    backgroundColor: Colors.teal,
+                  ),
+                );
+              }
+            } catch (err) {
+              debugPrint('FCM Notification dispatch error failure: $err');
+            }
+          }
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E2225),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-          ],
-        ),
+            title: const Text(
+              'Publish Community Broadcast',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            content: SizedBox(
+              width: 460,
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // DYNAMIC RENDERING DROPDOWN SELECTION WINDOW
+                    isDropdownLoading
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12.0),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF4DB6AC),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Loading list options...',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : DropdownButtonFormField<Map<String, String>>(
+                            value: selectedLinkedEntity,
+                            isExpanded: true,
+                            dropdownColor: const Color(0xFF14171A),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Target Incident Link (Optional)',
+                              labelStyle: TextStyle(color: Colors.white60),
+                              border: OutlineInputBorder(),
+                            ),
+                            items: dropdownOptions.map((
+                              Map<String, String> option,
+                            ) {
+                              return DropdownMenuItem<Map<String, String>>(
+                                value: option,
+                                child: Text(
+                                  option['display']!,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (v) =>
+                                setModalState(() => selectedLinkedEntity = v),
+                          ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: textController,
+                      maxLines: 4,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: const InputDecoration(
+                        hintText: 'Type announcement message...',
+                        hintStyle: TextStyle(color: Colors.white38),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Announcement body text details required.'
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.white38),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4DB6AC),
+                  foregroundColor: const Color(0xFF14171A),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                onPressed: dispatchLiveBroadcastNotification,
+                child: const Text(
+                  'Send Broadcast',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

@@ -18,6 +18,31 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
   int _bottomIndex = 0;
   final GlobalKey _mapKey = GlobalKey();
 
+  // DYNAMIC STATE HOLDERS
+  String _currentCommunityDisplay = 'Guest Mode';
+  String _currentRegionDisplay = 'Adelaide, South Australia';
+
+  @override
+  void initState() {
+    super.initState();
+    _recoverLastActiveProfileEnvironment();
+  }
+
+  /// PERSISTENT ENVIRONMENT RECOVERY ENGINE
+  /// Scans your SQLite database settings to preserve group identities across logouts
+  Future<void> _recoverLastActiveProfileEnvironment() async {
+    final String? savedCommunity =
+        await DatabaseHelper.instance.getConfig('auth_community_name') ??
+        await DatabaseHelper.instance.getConfig('community_name');
+
+    if (mounted && savedCommunity != null && savedCommunity.trim().isNotEmpty) {
+      setState(() {
+        _currentCommunityDisplay = savedCommunity.trim();
+        _currentRegionDisplay = 'Sector Cluster Area';
+      });
+    }
+  }
+
   /// Extracts coordinates, falling back to Adelaide center if device cache is null
   LatLng _getSafeCoordinates() {
     final double? lat = DatabaseHelper.instance.cachedLat;
@@ -26,7 +51,7 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
     if (lat != null && lng != null) {
       return LatLng(lat, lng);
     }
-    return const LatLng(-34.7690, 138.6076);
+    return const LatLng(-34.7689, 138.6076);
   }
 
   // Loads the active incidents from local SQLite matching tracking layouts
@@ -110,31 +135,34 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Fixed Header Text Titles Block
-                  const Text(
-                    'Guest Mode',
+                  // FIXED DYNAMIC HEADER: Displays your persistent community name variables automatically
+                  Text(
+                    _currentCommunityDisplay,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Row(
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.location_on,
                         color: Color(0xFF4DB6AC),
                         size: 16,
                       ),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          'Adelaide, South Australia',
+                          _currentRegionDisplay,
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white60, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
