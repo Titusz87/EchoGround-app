@@ -46,7 +46,7 @@ def register_community_leader(data: CommunityLeaderCreationRequest):
 def log_into_community_leader(data: LoginRequest):
 
     #try to login
-    row = login(data.id, data.password, models.Community_Leader)
+    row = login(data.id, data.password, models.Community_Leader, phone=data.phone, fcm_token=data.fcm_token)
     if not row:
         raise HTTPException(status_code=401, detail= "phone number and password pair do not match")
 
@@ -55,6 +55,8 @@ def log_into_community_leader(data: LoginRequest):
    
     return {
         "status": "ok",
+        "id": row.id, "first_name": row.first_name,
+        "community_name": row.community_name,
         "message": f"Successfully logged into community leader '{row.first_name}'"
     }
 
@@ -173,23 +175,55 @@ def create_community_specific_plans(data: CommunityLeaderPlanCreationRequest):
         if community_leader is None:
             raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
 
-        #first, search to see if this community leader has already made plans 
+        # Save the current plan before notifying households. The plan stays in
+        # the database; FCM carries only a short refresh signal, not the full text.
+        body = data.body.strip()
+        if not body:
+            raise HTTPException(status_code=422, detail="Community plan cannot be empty")
         community_plans = db.get_db_rows_by_all_fields(session, models.Community_Posts, {"community_leader_id": community_leader.id, "post_type": "plans"})
         if community_plans:
-            community_plans = community_plans[0] #because this fn returns a list. this list shouldn't be able to grow beyond length 1 due to this logic
-            community_plans.data = data.body
-            session.commit()
-            return {
-                "status": "ok",
-                "message": f"updated community plans for {community_leader.community_name}"
-                }
+            community_plans[0].data = body
+        else:
+            session.add(models.Community_Posts(
+                community_leader_id=community_leader.id,
+                community_name=community_leader.community_name,
+                post_type="plans", data=body,
+            ))
+        session.commit()
 
-        #create new plans instead of updating them 
-        create_community_plans(community_leader.id, community_leader.community_name, data.body)
+        # Membership must match the household's actual linked community too.
+        targets = session.query(models.Household).filter(
+            models.Household.community_leader_id == community_leader.id
+        ).all()
+        accepted = 0
+        missing_tokens = 0
+        failed = 0
+        for household in targets:
+            person = session.get(models.People, household.id)
+            if person is None or not person.fcm_token:
+                missing_tokens += 1
+                continue
+            try:
+                sent = firebase.send_firebase_notification(
+                    "Community plan updated",
+                    "Open the Plan tab to read your community's latest plan.",
+                    person.fcm_token,
+                    {"type": "community_plan", "community_leader_id": str(community_leader.id),
+                     "body": "Community plan updated. Open the Plan tab to read the latest version."},
+                )
+            except Exception:
+                sent = False
+            if sent:
+                accepted += 1
+            else:
+                failed += 1
         return {
-            "status": "ok",
-            "message": f"created community plans for {community_leader.community_name}"
-            }
+            "status": "ok", "message": "Community plan saved",
+            "households_targeted": len(targets),
+            "notifications_accepted": accepted,
+            "notifications_failed": failed,
+            "households_without_token": missing_tokens,
+        }
 
 #-------------------------------------------------------------------------------------
 
@@ -286,9 +320,15 @@ def refresh_stale_data_on_the_dashboard(data: CommunityLeaderRefreshPageRequest)
         if community_leader is None:
             raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
 
-        #now that we know that the community and community leader exist, we can return any data we want from the server 
+        plans = db.get_db_rows_by_all_fields(session, models.Community_Posts,
+            {"community_leader_id": community_leader.id, "post_type": "plans"})
         return {
             "status": "ok",
             "message": "pulled necessary data for community leader dashboard from servers",
-            "data": {} 
+            "data": {
+                "community name": community_leader.community_name,
+                "community leader name": community_leader.first_name,
+                "community leader phone": community_leader.phone,
+                "community plans": plans[0].data if plans else "",
+            } 
         }      

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 import '../services/auth_service.dart';
 import '../services/database_helper.dart';
+import '../services/session_store.dart';
 
 /// Shows the login / sign-up dialog for either a household or a community leader.
 /// [onAuthSuccess] is called after a successful login or registration.
@@ -22,6 +24,8 @@ void showLoginDialog(
   final countController = TextEditingController();
 
   // Dialog state (kept here because the dialog is built with StatefulBuilder)
+  bool isSubmitting = false;
+  String signInStage = 'Please wait…';
   bool isLogin = true; // true = login mode, false = sign-up mode
   String? errorMessage;
   String? selectedCommunity; // Currently chosen dropdown option
@@ -152,8 +156,10 @@ void showLoginDialog(
                           ),
                         ),
                         const SizedBox(height: 12),
+                      ],
                         TextField(
                           controller: phoneController,
+                          keyboardType: TextInputType.phone,
                           style: const TextStyle(color: Colors.white),
                           decoration: const InputDecoration(
                             labelText: 'Phone Number',
@@ -163,6 +169,7 @@ void showLoginDialog(
                         ),
                         const SizedBox(height: 12),
 
+                      if (!isLogin) ...[
                         if (!isLeader) ...[
                           TextField(
                             controller: countController,
@@ -258,17 +265,23 @@ void showLoginDialog(
                             ),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
-                          onPressed: () async {
+                          onPressed: isSubmitting ? null : () async {
+                            setState(() { isSubmitting = true; signInStage = isLogin ? 'Signing in…' : 'Checking device…'; });
+                            try {
                             setState(() => errorMessage = null);
-                            final int? parsedId =
-                                await AuthService.ensureBackendPersonId(
-                                  context,
-                                );
-                            if (parsedId == null) {
-                              setState(
-                                () => errorMessage = 'Could not resolve device connectivity. Please try again.',
-                              );
-                              return;
+                            int? parsedId;
+                            if (isLogin) {
+                              if (phoneController.text.trim().isEmpty) {
+                                setState(() => errorMessage = 'Enter the phone number used when you created this account.');
+                                return;
+                              }
+                            } else {
+                              parsedId = await AuthService.ensureBackendPersonId(context);
+                              if (!context.mounted) return;
+                              if (parsedId == null) {
+                                setState(() => errorMessage = AuthService.lastError ?? 'Device registration is not ready. Check permission prompts and retry.');
+                                return;
+                              }
                             }
                             if (passwordController.text.trim().isEmpty) {
                               setState(
@@ -277,10 +290,11 @@ void showLoginDialog(
                               );
                               return;
                             }
+                            setState(() => signInStage = isLogin ? 'Signing in…' : 'Creating account…');
                             bool success = false;
                             if (isLogin) {
                               success = await AuthService.login(
-                                id: parsedId,
+                                phone: phoneController.text.trim(),
                                 password: passwordController.text.trim(),
                                 isLeader: isLeader,
                               );
@@ -294,7 +308,7 @@ void showLoginDialog(
                                 return;
                               }
                               success = await AuthService.register(
-                                id: parsedId,
+                                id: parsedId!,
                                 password: passwordController.text.trim(),
                                 phone: phoneController.text.trim(),
                                 secondaryName: nameController.text.trim(),
@@ -305,34 +319,39 @@ void showLoginDialog(
                                 isLeader: isLeader,
                               );
                             }
+                            if (!context.mounted) return;
                             if (success) {
-                              // Commit the household session before opening its dashboard.
-                              // Registration does not currently persist this key in AuthService.
-                              if (!isLeader) {
-                                await DatabaseHelper.instance.saveConfig(
-                                  'auth_household_id',
-                                  parsedId.toString(),
-                                );
+                              // Login has already saved the ID returned by the backend.
+                              if (!isLogin && parsedId != null) {
+                                await SessionStore.activate(id: parsedId, isLeader: isLeader);
                               }
+                              DatabaseHelper.instance.syncNotifier.value++;
                               if (!context.mounted) return;
                               Navigator.of(context).pop();
                               onAuthSuccess();
                             } else {
                               setState(
                                 () => errorMessage =
-                                    'Authentication sequence tracking failed.',
+                                    AuthService.lastError ?? 'Sign-in or account creation was rejected. Check your details and the backend response status.',
                               );
+                            }
+                            } on TimeoutException {
+                              if (context.mounted) setState(() => errorMessage = AuthService.lastError ?? 'A sign-in operation timed out. Retry and check the device setup stage in the client console.');
+                            } catch (_) {
+                              if (context.mounted) setState(() => errorMessage = 'Could not finish sign-in. Check your connection and try again.');
+                            } finally {
+                              if (context.mounted) setState(() => isSubmitting = false);
                             }
                           },
                           child: Text(
-                            isLogin ? 'Login' : 'Register Now',
+                            isSubmitting ? signInStage : isLogin ? 'Login' : 'Register Now',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
                       TextButton(
-                        onPressed: () {
+                        onPressed: isSubmitting ? null : () {
                           setState(() {
                             isLogin = !isLogin;
                             errorMessage = null;

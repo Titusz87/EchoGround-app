@@ -50,6 +50,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  bool _pushStarted = false;
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -62,7 +63,12 @@ class _MyAppState extends State<MyApp> {
       ),
       home: Builder(
         builder: (context) {
-          NotificationService.setupPushNotifications(context);
+          if (!_pushStarted) {
+            _pushStarted = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) NotificationService.setupPushNotifications(context);
+            });
+          }
           return const AppGatekeeper();
         },
       ),

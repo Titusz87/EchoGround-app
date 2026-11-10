@@ -4,6 +4,7 @@ import '../../services/database_helper.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/report_dialog.dart';
 import '../../widgets/household/household_checklist.dart';
+import '../../widgets/planning/community_plan_panel.dart';
 import '../../widgets/incident_tile.dart';
 import '../login_page.dart';
 import 'components/marquee_banner.dart';
@@ -40,7 +41,9 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
       body: FutureBuilder<Map<String, String>>(
         future: _loadProfile(),
         builder: (context, snapshot) {
-          final lastName = snapshot.data?['last_name'] ?? 'Unknown Household';
+          final lastName = (snapshot.data?['last_name'] ?? '').trim();
+          final hasFamilyName = lastName.isNotEmpty &&
+              !['unknown', 'unknown household', '—'].contains(lastName.toLowerCase());
 
           return SingleChildScrollView(
             // FIXED: Removed the left sidebar padding constraint completely!
@@ -51,13 +54,19 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
               children: [
                 // Profile Text Header Block
                 Text(
-                  'Household $lastName',
+                  hasFamilyName ? 'Welcome back, $lastName family' : 'Welcome back',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Let’s keep your household prepared.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: Colors.white60),
                 ),
                 const SizedBox(height: 24),
 
@@ -105,11 +114,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
   Widget _buildMainViewContent() {
     // Switch state layout frames based on your bottom navigation choices
     if (_bottomIndex == 1) return const HouseholdChecklist();
-    if (_bottomIndex == 3)
-      return _buildPlaceholderCard(
-        'Community Action Plan Matrix',
-        Icons.groups,
-      );
+    if (_bottomIndex == 3) return const CommunityPlanPanel();
 
     // Default Index (0) -> Main Feed Overview Card Stack
     return Column(
