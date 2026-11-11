@@ -100,10 +100,9 @@ def get_all_incidents_affecting_the_community(data:CommunityLeaderIncidentReques
 
 #---------------------------------------------------------------------------------------------
 #rewrite incident ORM objects to have been validated by a community leader
-class CommunityLeaderValidateIncidentRequest(BaseModel):
+class CommunityLeaderValidateIncidentRequest(BaseModel):    
     id: int
-    validated_incidents: list[str]
-    notice: str | None = None
+    validated_incidents: dict[str, str | None] #the validated incidents are {key: incident_id (string), value: notice (string)}. Notice can also be None 
 
 @router.put("/community-leader/validate-incidents")
 def update_incidents_to_be_validated_by_community_leader(data: CommunityLeaderValidateIncidentRequest):
@@ -119,17 +118,20 @@ def update_incidents_to_be_validated_by_community_leader(data: CommunityLeaderVa
         if community_leader is None:
             raise HTTPException(status_code=404, detail= "Community leader id does not exist in db records")
 
-        #first retrieve the incidents from the db using the inputted list
-        incidents = db.get_rows_from_ids(session, models.Current_Incident, data.validated_incidents)
+        #first retrieve the incidents from the db using just the keys from the input dictionary
+        incidents = list(data.validated_incidents) 
+        incidents = db.get_rows_from_ids(session, models.Current_Incident, incidents)
 
         #now, for each incident, include the communities name in the 'validated_by' dictionary in the incident row
-        #optionally, include a 'notice' as the value in the dict 
+        #optionally, include a 'notice' as the value in the dict
+        successful_validations = {}  
         for incident in incidents:
-            #do this dumb logic again to make it safe
-            validated_by = dict(incident.validated_by or {})
-            if community_leader.community_name not in list(validated_by):
-                validated_by[community_leader.community_name] = data.notice
-                incident.validated_by = validated_by
+            validated_by = dict(incident.validated_by or {}) #safely retrieve the dictionary from the model
+
+            #add the notice to the dict or update the notice 
+            validated_by[community_leader.community_name] = data.validated_incidents[incident.id] #retrieve the specific notice for the incident
+            incident.validated_by = validated_by
+            successful_validations[incident.id] = data.validated_incidents[incident.id]
         session.commit()
 
         #finally, we also want to push the validated incidents to all community members
@@ -149,8 +151,9 @@ def update_incidents_to_be_validated_by_community_leader(data: CommunityLeaderVa
 
         return {
             "status": "ok",
-            "message0": f"updated {len(incidents)} incidents in the db to be validated by '{community_leader.community_name}' with notice '{data.notice}'",
-            "message1": f"sent push notifications to {households_messaged}/{len(community_leader.community_members)} members of community: {community_leader.community_name}"
+            "message0": f"updated {len(incidents)} incidents in the db to be validated by '{community_leader.community_name}':",
+            "message1": f"incidents: {successful_validations}",
+            "message2": f"sent push notifications to {households_messaged}/{len(community_leader.community_members)} members of community: {community_leader.community_name}"
             }
 
 #------------------------------------------------------------------------------------------------

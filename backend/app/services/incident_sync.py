@@ -140,13 +140,12 @@ def update_database_incidents(incidents, fake_incidents = False):
             notify_users(session, push_data)
 
             #we also need to update the test incidents, and send notifications to the users
-            test_incident_updates = update_test_incidents(session)
-            push_test_data = create_user_notification_data(nearby_incident_data, test_incident_updates)
-            people_with_test_updates_count = sum(bool(incidents) for incidents in push_test_data.values())
-            print(f"{people_with_test_updates_count} out of {len(db.get_all_rows(session, models.People))} people have test incident updates") 
-            notify_users(session, push_test_data)
-            
-            
+            if system_settings.get("update_test_incidents"):
+                test_incident_updates = update_test_incidents(session)
+                push_test_data = create_user_notification_data(nearby_incident_data, test_incident_updates)
+                people_with_test_updates_count = sum(bool(incidents) for incidents in push_test_data.values())
+                print(f"{people_with_test_updates_count} out of {len(db.get_all_rows(session, models.People))} people have test incident updates") 
+                notify_users(session, push_test_data)
             
 
         #------------------Cleanup: flush temporary_incidents and delete archived incidents from current_incidents-----
