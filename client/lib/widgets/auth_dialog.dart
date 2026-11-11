@@ -33,6 +33,7 @@ void showLoginDialog(
   /// Fetches the list of community names from the backend environment.
   Future<List<String>> fetchCommunityNames() async {
     try {
+      // FIXED: Reads your deployment environment variables directly instead of looking inside an empty database table
       const String backendUrl = String.fromEnvironment(
         'BACKEND_URL',
         defaultValue: 'http://127.0.0.1:8000',
@@ -58,10 +59,9 @@ void showLoginDialog(
               .map((item) {
                 if (item is Map) {
                   return (item['community_name'] ?? item['name'] ?? '')
-                      .toString()
-                      .trim();
+                      .toString();
                 }
-                return item.toString().trim();
+                return item.toString();
               })
               .where((name) => name.isNotEmpty)
               .toList();
@@ -144,7 +144,7 @@ void showLoginDialog(
                         const SizedBox(height: 16),
                       ],
 
-                      // Input Forms Configuration Layout View Shell
+                      // Sign-up fields
                       if (!isLogin) ...[
                         TextField(
                           controller: nameController,
@@ -157,7 +157,6 @@ void showLoginDialog(
                         ),
                         const SizedBox(height: 12),
                       ],
-<<<<<<< HEAD
                         TextField(
                           controller: phoneController,
                           keyboardType: TextInputType.phone,
@@ -170,20 +169,6 @@ void showLoginDialog(
                         ),
                         const SizedBox(height: 12),
 
-=======
-
-                      TextField(
-                        controller: phoneController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          labelText: 'Phone Number',
-                          labelStyle: TextStyle(color: Colors.white60),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
->>>>>>> origin/main
                       if (!isLogin) ...[
                         if (!isLeader) ...[
                           TextField(
@@ -198,6 +183,7 @@ void showLoginDialog(
                           ),
                           const SizedBox(height: 12),
 
+                          // 🛠️ CASE A: HOUSEHOLD SEEKS AN EXISTING COMMUNITY FROM DROPDOWN
                           FutureBuilder<List<String>>(
                             future: communitiesFuture,
                             builder: (context, snapshot) {
@@ -242,6 +228,7 @@ void showLoginDialog(
                             },
                           ),
                         ] else ...[
+                          // 🛠️ CASE B: LEADER CREATES/TYPES A BRAND NEW COMMUNITY NAME
                           TextField(
                             controller: communityController,
                             style: const TextStyle(color: Colors.white),
@@ -254,6 +241,7 @@ void showLoginDialog(
                         ],
                         const SizedBox(height: 12),
                       ],
+
                       TextField(
                         controller: passwordController,
                         obscureText: true,
@@ -271,6 +259,7 @@ void showLoginDialog(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF4DB6AC),
                             foregroundColor: const Color(0xFF14171A),
+                            elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(24.0),
                             ),
@@ -280,7 +269,6 @@ void showLoginDialog(
                             setState(() { isSubmitting = true; signInStage = isLogin ? 'Signing in…' : 'Checking device…'; });
                             try {
                             setState(() => errorMessage = null);
-<<<<<<< HEAD
                             int? parsedId;
                             if (isLogin) {
                               if (phoneController.text.trim().isEmpty) {
@@ -294,29 +282,8 @@ void showLoginDialog(
                                 setState(() => errorMessage = AuthService.lastError ?? 'Device registration is not ready. Check permission prompts and retry.');
                                 return;
                               }
-=======
-                            final String cleanPassword = passwordController.text
-                                .trim();
-                            final String cleanCommunity = communityController
-                                .text
-                                .trim();
-                            final String cleanPhone = phoneController.text
-                                .trim();
-                            final String cleanSecondaryName = nameController
-                                .text
-                                .trim();
-                            final int? parsedId =
-                                await AuthService.ensureBackendPersonId(
-                                  context,
-                                );
-                            if (parsedId == null) {
-                              setState(
-                                () => errorMessage = 'Could not resolve device connectivity. Please try again.',
-                              );
-                              return;
->>>>>>> origin/main
                             }
-                            if (cleanPassword.isEmpty) {
+                            if (passwordController.text.trim().isEmpty) {
                               setState(
                                 () => errorMessage =
                                     'Password field cannot be empty.',
@@ -327,50 +294,12 @@ void showLoginDialog(
                             bool success = false;
                             if (isLogin) {
                               success = await AuthService.login(
-<<<<<<< HEAD
                                 phone: phoneController.text.trim(),
                                 password: passwordController.text.trim(),
-=======
-                                id: parsedId,
-                                password: cleanPassword,
->>>>>>> origin/main
                                 isLeader: isLeader,
                               );
-                              if (success && isLeader) {
-                                // 🎯 FIXED RECOVERY HANDSHAKE:
-                                // Read the matching mapped name bound specifically to this Person ID inside your local key store!
-                                final String savedMappingKey =
-                                    'meta_community_mapping_${parsedId}';
-                                final String recoveredDbName =
-                                    await DatabaseHelper.instance.getConfig(
-                                      savedMappingKey,
-                                    ) ??
-                                    '';
-                                if (recoveredDbName.trim().isNotEmpty) {
-                                  await DatabaseHelper.instance.saveConfig(
-                                    'auth_community_name',
-                                    recoveredDbName.trim(),
-                                  );
-                                  await DatabaseHelper.instance.saveConfig(
-                                    'community_name',
-                                    recoveredDbName.trim(),
-                                  );
-                                  print(
-                                    "🎯 IDENTITIES RECOVERY SUCCESS: Restored Postgres target name from local mapping cache: $recoveredDbName",
-                                  );
-                                } else if (cleanCommunity.isNotEmpty) {
-                                  await DatabaseHelper.instance.saveConfig(
-                                    'auth_community_name',
-                                    cleanCommunity,
-                                  );
-                                  await DatabaseHelper.instance.saveConfig(
-                                    'community_name',
-                                    cleanCommunity,
-                                  );
-                                }
-                              }
                             } else {
-                              if (cleanCommunity.isEmpty) {
+                              if (communityController.text.trim().isEmpty) {
                                 setState(() {
                                   errorMessage = isLeader
                                       ? 'Please specify a name for your new community.'
@@ -379,65 +308,25 @@ void showLoginDialog(
                                 return;
                               }
                               success = await AuthService.register(
-<<<<<<< HEAD
                                 id: parsedId!,
                                 password: passwordController.text.trim(),
                                 phone: phoneController.text.trim(),
                                 secondaryName: nameController.text.trim(),
                                 communityName: communityController.text.trim(),
-=======
-                                id: parsedId,
-                                password: cleanPassword,
-                                phone: cleanPhone,
-                                secondaryName: cleanSecondaryName,
-                                communityName: cleanCommunity,
->>>>>>> origin/main
                                 count:
                                     int.tryParse(countController.text.trim()) ??
                                     1,
                                 isLeader: isLeader,
                               );
-                              if (success) {
-                                final String stylizedCommName = cleanCommunity
-                                    .replaceAll('\r', '')
-                                    .replaceAll('\n', '')
-                                    .trim();
-                                final String savedMappingKey =
-                                    'meta_community_mapping_${parsedId}';
-                                // 🎯 LOCK IN PERSISTENCE: Maps this custom hardware token ID directly to the registered group value
-                                await DatabaseHelper.instance.saveConfig(
-                                  'auth_leader_id',
-                                  parsedId.toString(),
-                                );
-                                await DatabaseHelper.instance.saveConfig(
-                                  'auth_community_name',
-                                  stylizedCommName,
-                                );
-                                await DatabaseHelper.instance.saveConfig(
-                                  'community_name',
-                                  stylizedCommName,
-                                );
-                                await DatabaseHelper.instance.saveConfig(
-                                  savedMappingKey,
-                                  stylizedCommName,
-                                );
-                                print(
-                                  "🎯 REGISTRATION LINK SEED: Established local identity map for token: $savedMappingKey -> $stylizedCommName",
-                                );
-                              }
                             }
                             if (!context.mounted) return;
                             if (success) {
-<<<<<<< HEAD
                               // Login has already saved the ID returned by the backend.
                               if (!isLogin && parsedId != null) {
                                 await SessionStore.activate(id: parsedId, isLeader: isLeader);
                               }
                               DatabaseHelper.instance.syncNotifier.value++;
                               if (!context.mounted) return;
-=======
-                              DatabaseHelper.instance.syncNotifier.value++;
->>>>>>> origin/main
                               Navigator.of(context).pop();
                               onAuthSuccess();
                             } else {
