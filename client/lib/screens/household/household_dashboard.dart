@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../services/database_helper.dart';
+import '../../widgets/planning/community_plan_panel.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/report_dialog.dart';
-import '../../widgets/household/household_checklist.dart';
+import '../../widgets/household/household_checklist_choice.dart';
 import '../../widgets/incident_tile.dart';
 import '../login_page.dart';
 import 'components/marquee_banner.dart';
@@ -90,7 +91,9 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
       body: FutureBuilder<Map<String, String>>(
         future: _loadProfile(),
         builder: (context, snapshot) {
-          final lastName = snapshot.data?['last_name'] ?? 'Unknown Household';
+          final lastName = (snapshot.data?['last_name'] ?? '').trim();
+          final hasFamilyName = lastName.isNotEmpty &&
+              !['unknown', 'unknown household', '—'].contains(lastName.toLowerCase());
 
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -99,7 +102,9 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
               children: [
                 // Profile Text Header Block
                 Text(
-                  'Household $lastName',
+                  hasFamilyName
+                      ? 'Welcome back, $lastName family!'
+                      : 'Welcome back! Glad you’re here.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 22,
@@ -173,13 +178,8 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
   }
 
   Widget _buildMainViewContent() {
-    if (_bottomIndex == 1) return const HouseholdChecklist();
-    if (_bottomIndex == 3) {
-      return _buildPlaceholderCard(
-        'Community Action Plan Matrix',
-        Icons.groups,
-      );
-    }
+    if (_bottomIndex == 1) return const HouseholdChecklistChoice();
+    if (_bottomIndex == 3) return const CommunityPlanPanel();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -308,46 +308,6 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
             },
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildPlaceholderCard(String title, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF14171A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: const Color(0xFF4DB6AC), size: 20),
-              const SizedBox(width: 8),
-              Text(
-                title.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 24.0),
-              child: Text(
-                'No content active in this component panel context.',
-                style: TextStyle(color: Colors.white38, fontSize: 13),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

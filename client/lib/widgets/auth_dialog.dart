@@ -355,7 +355,7 @@ void showLoginDialog(
                                     'meta_community_mapping_${parsedId}';
                                 // 🎯 LOCK IN PERSISTENCE: Maps this custom hardware token ID directly to the registered group value
                                 await DatabaseHelper.instance.saveConfig(
-                                  'auth_leader_id',
+                                  isLeader ? 'auth_leader_id' : 'auth_household_id',
                                   parsedId.toString(),
                                 );
                                 await DatabaseHelper.instance.saveConfig(
