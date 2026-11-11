@@ -4,7 +4,6 @@ import 'household/household_dashboard.dart';
 import 'community_leader/leader_dashboard.dart';
 import '../widgets/auth_dialog.dart';
 import '../services/database_helper.dart';
-import '../services/session_store.dart';
 import 'app_gatekeeper.dart';
 
 class LoginPage extends StatelessWidget {
@@ -122,7 +121,14 @@ class LoginPage extends StatelessWidget {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     onPressed: () async {
-                      await SessionStore.clear();
+                      await DatabaseHelper.instance.saveConfig(
+                        'auth_household_id',
+                        '',
+                      );
+                      await DatabaseHelper.instance.saveConfig(
+                        'auth_leader_id',
+                        '',
+                      );
                       await DatabaseHelper.instance.saveConfig(
                         'household_last_name',
                         '',

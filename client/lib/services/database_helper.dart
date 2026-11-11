@@ -7,7 +7,6 @@ import 'package:path/path.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-  static Future<Database>? _openingDatabase;
 
   // Added reactive synchronisation notifier layer for real-time UI triggering
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
@@ -20,14 +19,8 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    final opening = _openingDatabase ??= _initDB('incidents_cache.db');
-    try {
-      _database = await opening;
-      return _database!;
-    } catch (_) {
-      if (identical(_openingDatabase, opening)) _openingDatabase = null;
-      rethrow;
-    }
+    _database = await _initDB('incidents_cache.db');
+    return _database!;
   }
 
   Future<Database> _initDB(String filePath) async {

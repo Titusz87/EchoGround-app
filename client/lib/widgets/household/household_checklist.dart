@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/database_helper.dart';
-import 'household_evacuation_plan.dart';
 
 /// Private, account-scoped checklist. Does not transmit household information.
 class HouseholdChecklist extends StatefulWidget {
@@ -305,12 +304,6 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
       onChanged: (value) => changed(() => fields[id] = value),
     ),
   );
-
-  Future<void> usePlan() async {
-    await save(quiet: true);
-    if (!mounted || owner == null || dirty || saveError != null) return;
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => HouseholdEvacuationPlan(owner: owner!, percentage: completionPercentage)));
-  }
 
   Widget choice(String id, String label, Map<String, String> options) => Padding(
     padding: const EdgeInsets.only(bottom: 20),
@@ -815,8 +808,6 @@ class _HouseholdChecklistState extends State<HouseholdChecklist> {
       decoration: BoxDecoration(color: const Color(0xFF14171A), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const Text('HOUSEHOLD CHECKLIST', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-        const SizedBox(height: 12),
-        FilledButton.icon(onPressed: saving ? null : usePlan, icon: const Icon(Icons.fact_check_outlined), label: const Text('Use my plan')),
         if (complete) ...[
           const SizedBox(height: 12),
           OutlinedButton.icon(
