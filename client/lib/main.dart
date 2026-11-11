@@ -1,22 +1,29 @@
 import 'package:flutter/material.dart';
+
 import 'services/notification_service.dart';
 import 'screens/guest_mode/guest_mode_dashboard.dart';
-import 'services/database_helper.dart'; 
+import 'services/database_helper.dart';
 import 'screens/app_gatekeeper.dart';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-// Modern conditional import: Swaps out the blank mobile stub for the real web listener when running on a browser
 import 'services/web_listener_stub.dart'
     if (dart.library.js) 'services/web_listener.dart';
 
 void initializeNotificationDatabaseSync() async {
-  // CASE 1: App is open/active in the foreground
+  // Enforces data connection locks cleanly right at boot time
+  await DatabaseHelper.instance.database;
+
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
     try {
       if (message.data != null) {
-        final Map<String, dynamic> cleanData = Map<String, dynamic>.from(message.data);
+        final Map<String, dynamic> cleanData = Map<String, dynamic>.from(
+          message.data,
+        );
         if (cleanData.isNotEmpty) {
-          print("Foreground raw payload sanitized safely. Ingesting row entries...");
+          print(
+            "Foreground raw payload sanitized safely. Ingesting row entries...",
+          );
           await DatabaseHelper.instance.insertNotification(cleanData);
         }
       }
@@ -25,33 +32,13 @@ void initializeNotificationDatabaseSync() async {
     }
   });
 
-  // CASE 2: Background capture logic (Runs code on Web, safely runs a blank function on Mobile)
   initWebMessageListener();
-
-  // --- SQLite Local Verification Debug Loop ---
-  try {
-    print("Checking local SQLite cache contents...");
-    final storedIncidents = await DatabaseHelper.instance.fetchAllNotifications();
-    
-    if (storedIncidents.isEmpty) {
-      print("SQLite Status: Connected cleanly, but database is currently EMPTY.");
-    } else {
-      print("SQLite Status: Found ${storedIncidents.length} saved entries!");
-      for (var row in storedIncidents) {
-        print("   -> Loaded Incident ID: ${row['id']} | Event Type: ${row['event_type']} | Status: ${row['status']}");
-      }
-    }
-  } catch (e) {
-    print("SQLite Database Error during startup: $e");
-  }
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize modular Firebase settings
   await NotificationService.initFirebase();
-
+  initializeNotificationDatabaseSync();
   runApp(const MyApp());
 }
 
@@ -64,13 +51,6 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   @override
-  void initState() {
-    super.initState();
-    // Activate the cross-platform SQLite background listener tracking loops
-    initializeNotificationDatabaseSync();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -80,10 +60,8 @@ class _MyAppState extends State<MyApp> {
           brightness: Brightness.dark,
         ),
       ),
-      //  Swapped out GuestModeDashboard() to place the gatekeeper in control on system boots!
       home: Builder(
         builder: (context) {
-          // Fire off the automated location tracking loops safely inside a layout builder context shell
           NotificationService.setupPushNotifications(context);
           return const AppGatekeeper();
         },
@@ -91,4 +69,3 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-

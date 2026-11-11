@@ -4,7 +4,10 @@ on:
   push:
     branches:
       - main  # Automatically triggers on merges or pushes to main
-  workflow_dispatch:  # Lets you run it manually from the Actions tab ("Run workflow")
+  pull_request:
+    branches:
+      - main  # Runs the build check on open PRs without deploying
+  workflow_dispatch:  # Lets it run it manually from the Actions tab ("Run workflow")
 
 permissions:
   contents: write
@@ -47,6 +50,7 @@ jobs:
             --base-href "/EchoGround-app/"
 
       - name: Deploy to GitHub Pages
+        if: github.event_name != 'pull_request'
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: client/build/web

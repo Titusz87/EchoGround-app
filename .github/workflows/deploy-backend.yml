@@ -3,9 +3,14 @@ name: Deploy FastAPI Backend
 on:
   push:
     branches:
-      - main  # Automatically fires when code updates hit your main branch
+      - main  # Automatically fires when code updates hit the main branch
     paths:
       - 'backend/**'  # ONLY runs if files inside the backend subfolder change
+  pull_request:
+    branches:
+      - main  # Runs a syntax/install check on open PRs without deploying
+    paths:
+      - 'backend/**'
 
 jobs:
   deploy:
@@ -25,11 +30,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install uv fastapi[standard]
 
+      - name: Verify Backend Imports
+        run: |
+          cd backend
+          uv run python -c "import app.main"
+
       - name: Deploy Live to FastAPI Cloud
+        if: github.event_name != 'pull_request'
         env:
           FASTAPI_CLOUD_TOKEN: ${{ secrets.FASTAPI_CLOUD_TOKEN }}
           FASTAPI_CLOUD_APP_ID: ${{ secrets.FASTAPI_CLOUD_APP_ID }}
         run: |
           cd backend
-          
           uv run fastapi deploy
