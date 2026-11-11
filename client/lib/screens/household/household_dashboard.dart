@@ -5,7 +5,7 @@ import '../../services/database_helper.dart';
 import '../../widgets/planning/community_plan_panel.dart';
 import '../../widgets/active_incidents_card.dart';
 import '../../widgets/report_dialog.dart';
-import '../../widgets/household/household_checklist.dart';
+import '../../widgets/household/household_checklist_choice.dart';
 import '../../widgets/incident_tile.dart';
 import '../login_page.dart';
 import 'components/marquee_banner.dart';
@@ -178,7 +178,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
   }
 
   Widget _buildMainViewContent() {
-    if (_bottomIndex == 1) return const HouseholdChecklist();
+    if (_bottomIndex == 1) return const HouseholdChecklistChoice();
     if (_bottomIndex == 3) return const CommunityPlanPanel();
 
     return Column(
