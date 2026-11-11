@@ -11,40 +11,19 @@ class MarqueeBanner extends StatefulWidget {
 
 class _MarqueeBannerState extends State<MarqueeBanner> {
   late ScrollController _scrollController;
-  bool _isLooping = false; // Prevents overlapping animation threads
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    // Start animation immediately after the layout renders its first frame
     WidgetsBinding.instance.addPostFrameCallback((_) => _startAnimationLoop());
   }
 
-  // Detects incoming real-time backend updates and forces the scrolling thread to adapt to the new size
-  @override
-  void didUpdateWidget(covariant MarqueeBanner oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.text != widget.text) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(0); // Snap back to the beginning immediately
-      }
-      // Trigger animation calculation on the next frame pass
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _startAnimationLoop(),
-      );
-    }
-  }
-
   void _startAnimationLoop() async {
-    if (_isLooping) return; // Guard against thread duplicates
-    _isLooping = true;
-
     while (mounted) {
       await Future.delayed(const Duration(milliseconds: 500));
-      if (!mounted || !_scrollController.hasClients) {
-        _isLooping = false;
-        return;
-      }
+      if (!mounted || !_scrollController.hasClients) return;
 
       final double maxScroll = _scrollController.position.maxScrollExtent;
 
@@ -60,12 +39,8 @@ class _MarqueeBannerState extends State<MarqueeBanner> {
         if (mounted && _scrollController.hasClients) {
           _scrollController.jumpTo(0); // Snap back to the beginning to loop
         }
-      } else {
-        // If text is too short to scroll, wait briefly before checking again
-        await Future.delayed(const Duration(seconds: 2));
       }
     }
-    _isLooping = false;
   }
 
   @override
