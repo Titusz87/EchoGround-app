@@ -7,6 +7,7 @@ import 'package:path/path.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
+  static Future<Database>? _openingDatabase;
 
   // Added reactive synchronisation notifier layer for real-time UI triggering
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
@@ -19,8 +20,14 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('incidents_cache.db');
-    return _database!;
+    final opening = _openingDatabase ??= _initDB('incidents_cache.db');
+    try {
+      _database = await opening;
+      return _database!;
+    } catch (_) {
+      if (identical(_openingDatabase, opening)) _openingDatabase = null;
+      rethrow;
+    }
   }
 
   Future<Database> _initDB(String filePath) async {
@@ -76,17 +83,6 @@ class DatabaseHelper {
     ''');
   }
 
-  /// Updates the status value of an incident/report record inside the cache table
-  Future<int> updateNotificationStatus(String id, String status) async {
-    final db = await instance.database;
-    return await db.update(
-      'notifications', // Replace with your exact SQLite notification table name if different
-      {'status': status},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 3) {
       try {
@@ -131,7 +127,7 @@ class DatabaseHelper {
           fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
         ),
         'event_type': sanitizeString(
-          dataPayload['title'],
+          dataPayload['event_type'],
           fallback: 'General Incident',
         ),
         'status': sanitizeString(dataPayload['status'], fallback: 'Active'),
