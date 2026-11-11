@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../services/database_helper.dart';
 import '../../widgets/active_incidents_card.dart';
@@ -18,8 +19,57 @@ class HouseholdDashboard extends StatefulWidget {
 class _HouseholdDashboardState extends State<HouseholdDashboard> {
   int _bottomIndex =
       0; // Standard bottom navigation item controller index tracking
-  final String _announcementText =
-      'No active announcements at the moment. Check back later for critical community updates.';
+  String _activeAnnouncementBannerText =
+      'No active announcements at this time.';
+
+  @override
+  void initState() {
+    super.initState();
+    _recoverStoredActiveAnnouncement();
+    _establishRealtimeBannerListener();
+  }
+
+  /// Restores the last active cloud notification text value from SQLite configurations on layout init
+  Future<void> _recoverStoredActiveAnnouncement() async {
+    final String? cachedAnnouncement = await DatabaseHelper.instance.getConfig(
+      'last_live_announcement',
+    );
+    if (mounted &&
+        cachedAnnouncement != null &&
+        cachedAnnouncement.trim().isNotEmpty) {
+      setState(() {
+        _activeAnnouncementBannerText = cachedAnnouncement.trim();
+      });
+    }
+  }
+
+  /// 🛰️ REAL-TIME STREAM DECODER
+  /// Intercepts incoming FCM foreground announcement broadcast payloads on message delivery
+  void _establishRealtimeBannerListener() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.data != null) {
+        final Map<String, dynamic> cleanData = Map<String, dynamic>.from(
+          message.data,
+        );
+
+        // Check for type definition to handle data streams accurately
+        final String typeStr = (cleanData['type'] ?? '').toString();
+        if (typeStr.contains('Announcement')) {
+          // Extracts the correct CAPITALIZED 'Message' key matching your backend frame payload log model!
+          final String? incomingBody =
+              cleanData['Message']?.toString() ??
+              cleanData['body']?.toString() ??
+              cleanData['message']?.toString();
+
+          if (incomingBody != null && mounted) {
+            setState(() {
+              _activeAnnouncementBannerText = incomingBody.trim();
+            });
+          }
+        }
+      }
+    });
+  }
 
   Future<Map<String, String>> _loadProfile() async {
     final lastName =
@@ -43,8 +93,6 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
           final lastName = snapshot.data?['last_name'] ?? 'Unknown Household';
 
           return SingleChildScrollView(
-            // FIXED: Removed the left sidebar padding constraint completely!
-            // All content rows now scale to full screen layout width safely.
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -85,33 +133,54 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white10),
       ),
-      child: InkWell(
-        onTap: () => _showAnnouncementDetails(),
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-          child: Row(
-            children: [
-              const Icon(Icons.campaign, color: Color(0xFF4DB6AC), size: 18),
-              const SizedBox(width: 8),
-              Expanded(child: MarqueeBanner(text: _announcementText)),
-            ],
-          ),
-        ),
+      child: ValueListenableBuilder<int>(
+        valueListenable: DatabaseHelper.instance.syncNotifier,
+        builder: (context, syncCount, child) {
+          return FutureBuilder<String>(
+            future: DatabaseHelper.instance
+                .getConfig('last_live_announcement')
+                .then((v) => v ?? 'No active announcements at this time.'),
+            builder: (context, snapshot) {
+              final String currentText =
+                  snapshot.data ?? _activeAnnouncementBannerText;
+
+              return InkWell(
+                onTap: () => _showAnnouncementDetails(),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 16,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.campaign,
+                        color: Color(0xFF4DB6AC),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: MarqueeBanner(text: currentText)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
 
   Widget _buildMainViewContent() {
-    // Switch state layout frames based on your bottom navigation choices
     if (_bottomIndex == 1) return const HouseholdChecklist();
-    if (_bottomIndex == 3)
+    if (_bottomIndex == 3) {
       return _buildPlaceholderCard(
         'Community Action Plan Matrix',
         Icons.groups,
       );
+    }
 
-    // Default Index (0) -> Main Feed Overview Card Stack
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -127,7 +196,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
     );
   }
 
-  // 🛠️ DYNAMIC COMMUNITY REPORT FEED INTERCEPTOR
+  // COMMUNITY REPORT FEED INTERCEPTOR METHOD
   Widget _buildCommunityReportsFeed() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -144,14 +213,35 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
             builder: (context, snapshot) {
               final rawList = snapshot.data ?? [];
 
-              // 1. Filter out only entries that are community reports
+              // 🛠️ FIXED: Strict filtering guard explicitly strips any leak copies out of the lists feed
               final reports = rawList.where((item) {
-                final id = item['id']?.toString() ?? '';
-                return id.startsWith('unknown_incident') ||
+                final String id = item['id']?.toString() ?? '';
+                final String typeStr =
+                    (item['event_type'] ?? item['type'] ?? '')
+                        .toString()
+                        .toLowerCase();
+                final String descStr = (item['description'] ?? '')
+                    .toString()
+                    .toLowerCase();
+                final String titleStr = (item['title'] ?? '')
+                    .toString()
+                    .toLowerCase();
+
+                // 1. Core ID configuration requirement
+                final bool isReportId =
+                    id.startsWith('unknown_incident') ||
                     id.contains('community_report');
+
+                // 2. Strict content pattern signatures match checks
+                final bool isAnnouncement =
+                    typeStr.contains('announcement') ||
+                    titleStr.contains('announcement') ||
+                    descStr.contains('linked context') ||
+                    descStr.contains('[linked');
+
+                return isReportId && !isAnnouncement;
               }).toList();
 
-              // 2. Anti-Duplication normalization layer: deduplicate by event type and time window
               final List<Map<String, dynamic>> uniqueReports = [];
               final Set<String> seenSignatures = {};
 
@@ -159,7 +249,6 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                 final type =
                     r['event_type']?.toString().toLowerCase().trim() ?? '';
                 final created = r['created']?.toString().trim() ?? '';
-                // Take base minute string slice or approximate group criteria signature
                 final timeSig = created.length > 16
                     ? created.substring(0, 16)
                     : created;
@@ -268,10 +357,8 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
       selectedIndex: _bottomIndex,
       onDestinationSelected: (idx) {
         if (idx == 2) {
-          // Trigger the 3-page structural report dialog modal overlay pattern
           showReportDialog(context);
         } else if (idx == 4) {
-          // Route direct page navigation context straight over the account profile portal
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -313,38 +400,48 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
   void _showAnnouncementDetails() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF14171A),
-        title: const Row(
-          children: [
-            Icon(Icons.campaign, color: Color(0xFF4DB6AC)),
-            SizedBox(width: 8),
-            Text(
-              'Community Announcement',
-              style: TextStyle(color: Colors.white, fontSize: 18),
+      builder: (context) => FutureBuilder(
+        future: DatabaseHelper.instance
+            .getConfig('last_live_announcement')
+            .then((v) => v ?? _activeAnnouncementBannerText),
+        builder: (context, snapshot) {
+          final contentText = snapshot.data ?? _activeAnnouncementBannerText;
+          return AlertDialog(
+            backgroundColor: const Color(0xFF14171A),
+            title: const Row(
+              children: [
+                Icon(Icons.campaign, color: Color(0xFF4DB6AC)),
+                SizedBox(width: 8),
+                Text(
+                  'Community Announcement',
+                  style: TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ],
             ),
-          ],
-        ),
-        content: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white10,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            _announcementText,
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Close',
-              style: TextStyle(color: Color(0xFF4DB6AC)),
+            content: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SingleChildScrollView(
+                child: Text(
+                  contentText,
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ),
             ),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(color: Color(0xFF4DB6AC)),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
