@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/database_helper.dart';
+import '../../widgets/planning/community_plan_panel.dart';
 import '../login_page.dart';
 import 'components/leader_stats_header.dart';
 import 'components/active_incidents_section.dart';
@@ -314,12 +315,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   }
 
   Widget _buildDynamicBodyContent() {
-    if (_bottomIndex == 1) {
-      return _buildPlaceholderCard(
-        'Community Action Plan Matrix',
-        Icons.assignment,
-      );
-    }
+    if (_bottomIndex == 1) return const CommunityPlanPanel(isLeader: true);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -333,43 +329,6 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
           },
         ),
       ],
-    );
-  }
-
-  Widget _buildPlaceholderCard(String title, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF14171A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: const Color(0xFF4DB6AC), size: 20),
-              const SizedBox(width: 8),
-              Text(
-                title.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Center(
-            child: Text(
-              'No content active in this component panel context.',
-              style: TextStyle(color: Colors.white38, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
