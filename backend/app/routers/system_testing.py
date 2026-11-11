@@ -4,11 +4,12 @@ from app.services import db_helpers as db
 from app.services.create_fake_data import create_fake_people, create_fake_incidents
 from app.database import get_session
 from app.models import Base
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError 
 from app import models
 from app.services import poll_dataquoll as dataquoll
 import app.services.system_settings as system_settings
-
+from sqlalchemy import inspect, text
+import json
 
 #Commented out for local integration validation tests
 #from app.services.firebase import verify_app_check
@@ -107,3 +108,31 @@ async def create_test_incidents(person_id: int = Query(..., ge=0), number_of_inc
             "message": f"created incidents: {ids} near person_id '{person_id}'"
         }
 
+#----------------------------------------------------------
+
+class PrintTableRequest(BaseModel):
+    table_name: str
+
+@router.post("/system/print-table")
+def print_database_table(data: PrintTableRequest):
+    with get_session() as session:
+
+        #try to find the table
+        inspector = inspect(session.get_bind())
+        table_names = inspector.get_table_names()
+        if data.table_name not in table_names:
+            raise HTTPException(status_code=404, detail="Table not found")
+
+        #retrieve all rows from the requested table
+        quoted_table = inspector.dialect.identifier_preparer.quote(data.table_name)
+        rows = session.execute(text(f"SELECT * FROM {quoted_table}")).mappings().all()
+
+        #convert to json and print
+        results = [dict(row) for row in rows]
+        print(json.dumps(results, indent=4, default=str))
+
+        return {
+            "status": "ok",
+            "message": f"Printed {len(results)} rows from {data.table_name}",
+            "row_count": len(results)
+        }
