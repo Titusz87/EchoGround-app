@@ -42,28 +42,22 @@ def register_household(data: HouseholdCreationRequest):
 #---------------------------------------------------------------------
 #log in to household
 class LoginRequest(BaseModel):
-    id: int | None = None  # legacy callers only
-    phone: str | None = None
+    id: int
     password: str
-    fcm_token: str | None = None
 
 @router.post("/household/login")
 def log_into_household(data: LoginRequest):
 
     #try to login
-    row = login(data.id, data.password, models.Household, phone=data.phone, fcm_token=data.fcm_token)
+    row = login(data.id, data.password, models.Household)
     if not row:
         raise HTTPException(status_code=401, detail="incorrect login details")
 
     #now that login is successful, we can return whatever data we want 
     #TODO: use the id to retrieve profile data and send it here
    
-    with get_session() as session:
-        leader = session.get(models.Community_Leader, row.community_leader_id) if row.community_leader_id is not None else None
-        community_name = leader.community_name if leader is not None else ""
     return {
-        "status": "ok", "id": row.id, "last_name": row.last_name,
-        "count": row.count, "community_name": community_name,
+        "status": "ok",
         "message": f"Successfully logged into '{row.last_name}' household",
     }
 
@@ -222,7 +216,7 @@ def refresh_stale_data_on_the_dashboard(data: HouseholdRefreshPageRequest):
         for id in community_leader.community_members:
             member_household = session.get(models.Household, id)
             if member_household is not None:
-                members_count += member_household.count or 0
+                members_count += member_household.count
 
         #retrieve community plans. the below fn returns a list  
         community_plans_rows = db.get_db_rows_by_all_fields(session, models.Community_Posts, {"community_leader_id": community_leader.id, "post_type": "plans"})
@@ -236,7 +230,6 @@ def refresh_stale_data_on_the_dashboard(data: HouseholdRefreshPageRequest):
             "message": "pulled necessary data for household dashboard from servers",
             "data": {"community name": community_leader.community_name,
                      "community leader name": community_leader.first_name,
-                     "community leader phone": community_leader.phone,
                      "community households count": len(community_leader.community_members or []),
                      "community members count": members_count,
                      "community plans": community_plans

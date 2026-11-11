@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/database_helper.dart';
-import '../../widgets/planning/community_plan_panel.dart';
 import '../login_page.dart';
 import 'components/leader_stats_header.dart';
 import 'components/active_incidents_section.dart';
@@ -269,7 +268,12 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   }
 
   Widget _buildDynamicBodyContent() {
-    if (_bottomIndex == 1) return const CommunityPlanPanel(isLeader: true);
+    if (_bottomIndex == 1) {
+      return _buildPlaceholderCard(
+        'Community Action Plan Matrix',
+        Icons.assignment,
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
