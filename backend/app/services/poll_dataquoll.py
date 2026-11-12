@@ -1,11 +1,10 @@
 import httpx
 import os
-from dotenv import load_dotenv
 from datetime import datetime, timezone
 from app.services.incident_sync import update_database_incidents
 import asyncio
 
-#-------vars------------------------------------------------
+#-------script vars------------------------------------------------
 
 event_types = set()
 statuses = set()
@@ -17,23 +16,25 @@ API_KEY = None
 
 verbose_debug = False
 write_to_db = True
-poll_states = ["nsw", "vic", "qld", "wa", "sa", "tas", "act", "nt"]
+poll_states = ["nsw", "vic", "qld", "wa", "sa", "tas", "act", "nt"] #all the states we are interested in polling
 poll_lock = asyncio.Lock()
 
 #-------classes------------------------------------------------
+
+#a python class used for creating incidents. The incidents need to be translated to ORM objects in another script for the db
 class Incident:
     def __init__(self, id, properties):
         try:
+            #these fields are pretty safe (always are filled by dataquoll)
             self.id = id
             self.event_type = properties["eventType"]
             self.status = properties["status"]
-            
             self.state = properties["location"]["state"]
             self.latitude = properties["location"]["latitude"]
             self.longitude = properties["location"]["longitude"]
             self.last_updated = datetime.fromisoformat(properties["timestamps"]["updated"]) #we need to create time variables for some fields 
             
-            #these fields may not have any data   
+            #these fields may not have any data, so they need fallbacks   
             self.warning_level = properties.get("warningLevel", "N/A") 
             self.description = properties["details"].get("description") #.get() is used for safety
             self.address = properties["location"].get("address")
@@ -56,6 +57,7 @@ class Incident:
         except Exception as e:
             print("Error creating Incident object from polling")
 
+        #for testing 
         if verbose_debug:
             print(f"Created Incident {self.id}")
             self.check_values_set()
@@ -65,8 +67,7 @@ class Incident:
         count = 0
         for attribute, value in vars(self).items():
             if value is None:
-                #print(f"\t{attribute} is not set")
-                unset_values.add(attribute)
+                unset_values.add(attribute)         #identify when incidents have unset values while polling heaps of incidents
 
 
 #--------functions----------------------------------------
@@ -82,7 +83,7 @@ def setup_polling():
         raise RuntimeError("Dataquoll api key is not set")
     print("Successfully set Dataquoll api key")
 
-#this fn is called from main.py
+#this fn is called from main.py and from the 'system' routes
 async def poll_all_states():
     #make sure this code can't run more than once while requests are arriving in
     async with poll_lock: 
@@ -110,7 +111,7 @@ async def poll_all_states():
             update_database_incidents(incidents)
 
     
-#get state data from dataquoll api
+#get state data from dataquoll api. Instructions pulled from the dataquoll online docs.
 async def poll_dataquoll_by_state(state):
     #construct the command "curl "https://dataquoll.io/api/v1/incidents" -H "Authorization: Bearer YOUR_API_KEY"
     url = "https://dataquoll.io/api/v1/incidents"
@@ -135,6 +136,7 @@ async def poll_dataquoll_by_state(state):
         state_incidents = create_incident_objects(data) #sort out our json objects
     return state_incidents
 
+#translate the incident objects from JSON
 def create_incident_objects(data):
     features = data["features"]
     incident_objects = []
@@ -147,7 +149,8 @@ def create_incident_objects(data):
         #add to all polled incidents and state specific dictionary
         incident_objects.append(incident)
     return incident_objects
-        
+
+#useful to obtain all the possible values of dataquoll incident fields 
 def print_attribute_sets(incidents):
     for i in incidents:
         event_types.add(i.event_type)
@@ -158,16 +161,3 @@ def print_attribute_sets(incidents):
     print(f"\tEvent Types: {event_types}")
     print(f"\tStatuses: {statuses}")
     print(f"\tWarning Levels: {warning_levels}")
-    #print(f"\tUnset Values: {unset_values}")
-
-
-
-        
-
-
-    
-    
-    
-   
-
-

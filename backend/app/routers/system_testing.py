@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Path, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from app.services import db_helpers as db
 from app.services.create_fake_data import create_fake_people, create_fake_incidents
@@ -11,15 +11,11 @@ import app.services.system_settings as system_settings
 from sqlalchemy import inspect, text
 import json
 
-#Commented out for local integration validation tests
-#from app.services.firebase import verify_app_check
-
 router = APIRouter()
-
 
 #------------------routes for testing the system----------------------------------
 
-#create people with random locations
+#create people with random locations around Australia 
 @router.post("/system/create-people")
 def create_test_people(number_of_people: int = Query(ge=0, le=10000)): #only numbers between 0 and 10000 allowed
     
@@ -30,14 +26,16 @@ def create_test_people(number_of_people: int = Query(ge=0, le=10000)): #only num
         "message": f"Created fake people with ids: {ids}",
     }
 
-#wipe a single table from db 
+#----------------------------------------------------------------------------
+
+#wipe a single table from db for convenience 
 @router.delete("/system/erase-table")
 def wipe_db_table(table_name: str):
 
-    #check the table name is correct 
     #dict of tables
-    table_models = {model.__tablename__: model for model in models.Base.registry._class_registry.values() if isinstance(model, type) and hasattr(model, "__tablename__")
-}
+    table_models = {model.__tablename__: model for model in models.Base.registry._class_registry.values() if isinstance(model, type) and hasattr(model, "__tablename__")}
+    
+    #check the table name is correct 
     if table_name not in table_models:
         raise HTTPException(
             status_code=404,
@@ -46,7 +44,7 @@ def wipe_db_table(table_name: str):
                 "message": f"'{table_name}' does not exist in records.",
             },
         )       
-    try:
+    try: #try to flush the table with a db helper 
         with get_session() as session:
             table = table_models[table_name]
             error = db.flush_db_table(session, table)
@@ -60,15 +58,18 @@ def wipe_db_table(table_name: str):
             "status": "ok",
             "message": f"Successfully flushed '{table_name}'.",
         }
+    
+    #handle a the case where the db is not able to flush the table  
     except SQLAlchemyError as e:
         return {
             "status": "failure",
             "message": f"Failed to flush '{table_name}': {e}",
         }
 
-#wipe db tables
-#this is a dangerous route to leave unprotected but fine for the prototype 
-#could do and AppCheck here and an admin check to make sure they can proceed 
+#--------------------------------------------------------------------------------
+
+#wipe the content of all db tables, excluding 'system_settings' which needs to always exist for the program to run
+#NOTE this is a dangerous route to leave unprotected but fine for the prototype. A lot of 'system' routes could be abused and should not be in a release build  
 @router.delete("/system/erase-all-records")
 def wipe_all_db_records():
     with get_session() as session:
@@ -80,7 +81,9 @@ def wipe_all_db_records():
         "message": "Flushed all db tables",
     }
 
-#this route lets you poll and update the db 
+#---------------------------------------------------------------------------------------------------------
+
+#this route lets you poll, and optionally update the db with the db sync function 
 @router.post("/system/poll")
 async def poll_dataquoll(sync_db: bool):
     
@@ -99,6 +102,8 @@ async def poll_dataquoll(sync_db: bool):
         "message": f"Polled Dataquoll and {message}",
     }
 
+#--------------------------------------------------------------------------------
+#create incidents for testing. Incidents are placed randomly around 'people' in the db according the the 'notify_within_radius' system setting
 @router.post("/system/create-incidents")
 async def create_test_incidents(person_id: int = Query(..., ge=0), number_of_incidents: int = Query(..., ge=0),): #values have to be inputted and greater than 0
 
@@ -109,7 +114,7 @@ async def create_test_incidents(person_id: int = Query(..., ge=0), number_of_inc
         }
 
 #----------------------------------------------------------
-
+#print a table (on the backend, it doesn't return the data to the front end) to visualise data in the db
 class PrintTableRequest(BaseModel):
     table_name: str
 
@@ -123,12 +128,13 @@ def print_database_table(data: PrintTableRequest):
         if data.table_name not in table_names:
             raise HTTPException(status_code=404, detail="Table not found")
 
-        #retrieve all rows from the requested table
+        #retrieve all rows from the requested table using raw SQL
         quoted_table = inspector.dialect.identifier_preparer.quote(data.table_name)
         rows = session.execute(text(f"SELECT * FROM {quoted_table}")).mappings().all()
 
         #convert to json and print
         results = [dict(row) for row in rows]
+        print(f"{data.table_name}:")
         print(json.dumps(results, indent=4, default=str))
 
         return {

@@ -24,7 +24,7 @@ def verify_person_creds(person_id, fcm_token = None):
 
         return True
 
-#this fn should work for both households and community leaders
+#this fn should work for both households and community leaders (and any other future models)
 def login(id, password, model):
     with get_session() as session:
 

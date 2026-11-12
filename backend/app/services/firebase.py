@@ -41,7 +41,7 @@ def initialise_firebase():
     print("Firebase initialised successfully")
     return firebase_admin.initialize_app(cred)
 
-
+#use to test whether firebase is working 
 def firebase_test_notification():
     message = messaging.Message(
         notification=messaging.Notification(
@@ -54,8 +54,7 @@ def firebase_test_notification():
     response = messaging.send(message)
     print(f"Test notification sent successfully! Message ID: {response}")
 
-
-# use try catch when calling this fn in case it fails
+#use try catch when calling this fn in case it fails
 def send_firebase_notification(_title, _body, _token, _data = None):
     try:
         message = messaging.Message(
@@ -75,10 +74,11 @@ def send_firebase_notification(_title, _body, _token, _data = None):
             print(f"Failed to send firebase notification to token: '{_token}'. {e}")
         return False
 
+#use to print db rows as JSON for firebase notifications 
 def row_to_firebase_data(row):
     return {column.name: str(getattr(row, column.name) or "") for column in row.__table__.columns}
 
-# verify firebase app check tokens to be authentic. so the user can't register with a fake fcm token
+#verify firebase app check tokens to be authentic. so the user can't register with a fake fcm token
 def verify_app_check(
     token: str | None = Header(
         default=None,

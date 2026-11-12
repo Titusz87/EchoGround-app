@@ -1,6 +1,5 @@
 from app import models
 from app.database import get_session
-from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 import app.services.db_helpers as db
 from app.services.quadtree import Quadtree
@@ -28,8 +27,10 @@ example_incidents = ['burn_off', 'hazmat', 'bushfire', 'structure_fire', 'medica
 #--------------------------fn's called from other scripts-----------------------------------------------
 
 #this fn is called from the polling script
-#this is complicated. Please don't touch it!
-#it can take real incidents as well as fake ones 
+#it can be inputted real incidents as well as fake ones
+#NOTE:this is complicated. Please don't touch it!
+#NOTE: the reason this very long function hasn't been broken into smaller functions, is that the way this function works continuously changes as the system evolves (cont)
+    #(cont). The inputs and outputs of everything would also be very complicated. This is more maintainable in the long term.     
 def update_database_incidents(incidents, fake_incidents = False):
     with get_session() as session:
         
@@ -124,7 +125,6 @@ def update_database_incidents(incidents, fake_incidents = False):
             notify_users(session, push_data_new_incidents)       
         
         
-    
         #--------------------Search nearby_incident_data to send users updates-------------------------------- 
 
         #at the moment this only updates the user if the 'notification_fields' have been changed
@@ -164,9 +164,9 @@ def update_database_incidents(incidents, fake_incidents = False):
         session.commit()
 
 
-#------------------------------helpers------------------------------------------------------------
+#------------------------------helpers for this script------------------------------------------------------------
 
-#This can be pushed to users
+#find the incidents that have expired 
 def get_expired_incidents(session, model):
     check = db.get_all_rows(session, model)
     expired = []
@@ -225,6 +225,7 @@ def current_incidents_changed_values(session, checklist_ids, check_fields):
 
     return updated
 
+#use 'updates' (dict) to update fields in a table
 def update_incident_table(session, model, updates):
     #extract the rows to update by their ids (the keys from updates)
     updated_rows = db.get_rows_from_ids(session, model, list(updates))
@@ -236,16 +237,20 @@ def update_incident_table(session, model, updates):
         for field, new_value in updated_fields.items():
             setattr(row, field, new_value)
 
+#print some info with db helpers for debugging
 def print_incidents_info(session):
     db.print_table_info(session, models.Temporary_Incident)
     db.print_table_info(session, models.Current_Incident)
     db.print_table_info(session, models.Archived_Incident)
 
+#safely use sets to retrieve which ids are actually new for 2 lists of ids
 def get_new_ids_safe(old_ids, new_ids):
     old_ids = set(old_ids or [])
     new_ids = set(new_ids or [])
     return new_ids - old_ids
 
+#use this to spatially partition incidents, for easy lookup 
+#NOTE: this fn contains depreciated custom code that was hand written to make a quadtree from scratch. The current system actually uses a BallTree library 
 def use_quadtree(session):
     current_incident_rows = db.get_all_rows(session, models.Current_Incident)
     people = db.get_all_rows(session, models.People) or []
@@ -284,6 +289,7 @@ def use_quadtree(session):
         print(results)
     return results
 
+#returns information to do with what incidents have updates for certain people 
 #returns {person_id: [updated incident ids]}
 def create_user_notification_data(people_to_incident_data, incident_updates):
     updated_incident_ids = list(incident_updates)
@@ -293,7 +299,8 @@ def create_user_notification_data(people_to_incident_data, incident_updates):
         result[person_id] = list(push_ids)
     return result
 
-#make sure this function isn't called before the archived incidents are deleted from current_incidents
+#notify multiple users of updates. Use the 'notification data' (dict) 
+#NOTE: make sure this function isn't called before the archived incidents are deleted from current_incidents
 #incidents may have been updated and then expired. The user still needs to be informed
 def notify_users(session, push_data):
 
@@ -311,7 +318,8 @@ def notify_users(session, push_data):
         if status:
             sent_messages += status
     print(f"Pushed {sent_messages} notifications to users")
-        
+
+#notify a single user with a firebase push notification         
 def notify_user(session, person_id, incident_ids, from_rows):
     
     #if there's no fcm token then don't bother sending a message
@@ -332,11 +340,11 @@ def notify_user(session, person_id, incident_ids, from_rows):
             print(f"Failed to send notification: {e}")
     return sent_messages
 
-
+#create readable english for the push notification 
 def create_message_from_incident(row):
     message = f"There is a {row.event_type} near you with status '{row.status}' and warning level '{row.warning_level}. "
 
-    #these fields from dataquoll can be blank  >:(
+    #these fields from dataquoll can be blank  
     if row.description is not None:
         message = message + row.description
     if row.address is not None:
@@ -365,6 +373,7 @@ def update_test_incidents(session):
     print(f"Updated the fields of {len(testing_incidents)} testing incidents")
     return updates
 
+#remove incidents from the 'people_incidents' table 
 def unsubscribe_people_from_incidents(session, unsubscribe_ids):
     people = db.get_all_rows(session, models.People_Incident)
     changed_row_count = 0

@@ -7,17 +7,16 @@ from app.services.create_records import create_household, create_emergency_repor
 from app.services.login import login
 from app.services import db_helpers as db
 from app.services import firebase
-import json
 
 #-----------------------------------------
 
 router = APIRouter()
 
 #-----------------------------------------------
-#make a household
+#create a household in the db
 class HouseholdCreationRequest(BaseModel):
     id: int
-    #fcm_token: str
+    #NOTE we don't need this field any more, due to simplifying the application: "fcm_token: str"   
     last_name: str
     phone: str
     count: int | None = None #client can provide these value but it is not required
@@ -26,7 +25,7 @@ class HouseholdCreationRequest(BaseModel):
 @router.post("/household/create")
 def register_household(data: HouseholdCreationRequest):
 
-    verification = verify_person_creds(data.id) #data.fcm_token)
+    verification = verify_person_creds(data.id)
     if verification is not True:
         raise HTTPException(status_code=404, detail=verification)
 
@@ -40,7 +39,8 @@ def register_household(data: HouseholdCreationRequest):
         "message": f"Household created successfully with id {data.id} and last name {data.last_name}",
     }
 #---------------------------------------------------------------------
-#log in to household
+
+#approves the login of household in the app
 class LoginRequest(BaseModel):
     id: int
     password: str
@@ -54,7 +54,7 @@ def log_into_household(data: LoginRequest):
         raise HTTPException(status_code=401, detail="incorrect login details")
 
     #now that login is successful, we can return whatever data we want 
-    #TODO: use the id to retrieve profile data and send it here
+    #we don't need to return anything however, this job will be handled by the 'refresh' routes
    
     return {
         "status": "ok",
@@ -62,12 +62,13 @@ def log_into_household(data: LoginRequest):
     }
 
 #---------------------------------------------------------------------
-#get all the communities so the household can join one 
+
+#get all the communities names for the household signup page in the UI 
 @router.get("/household/get-community-names")
 def get_all_community_names():
     with get_session() as session:
         
-        #get all the community names with db helper
+        #get all the community names with a db helper
         community_names = db.get_column(session, models.Community_Leader, "community_name")
 
     return {
@@ -76,11 +77,11 @@ def get_all_community_names():
         }
     
 #----------------------------------------------------------------------
+#register a household to a community
 class CommunityRegistrationRequest(BaseModel):
     id: int
     community_name: str
-    
-#register a household to a community 
+     
 @router.patch("/household/register")
 def register_household_to_community(data: CommunityRegistrationRequest):
     with get_session() as session:
@@ -90,14 +91,15 @@ def register_household_to_community(data: CommunityRegistrationRequest):
         if verification is not True:
             raise HTTPException(status_code=404, detail=verification)
 
-        #we know that the community name must exist because the front end received a list of all the names
-        #this would be a problem if community leaders could be deleted, but for the prototype we aren't implementing this
+        #check that the household exits
+        household = session.get(models.Household, data.id)
+        if household is None:
+            raise HTTPException(status_code=404, detail= f"id:{data.id} does not have a household")
 
-        #the community names are also unique due to the way they are created
+        #attempt to retrieve the community name
         community_leader = db.get_db_rows_by_all_fields(session, models.Community_Leader, {"community_name": data.community_name}) #this returns a list
         if len(community_leader) == 0:
             raise HTTPException(status_code=404, detail= f"community name '{data.community_name}' not found in database")
-
         community_leader = community_leader[0]
             
         #we know this exists because the household is logged in by this point. but just in case...
@@ -125,13 +127,13 @@ def register_household_to_community(data: CommunityRegistrationRequest):
             "message" : f"{household.last_name} household successfully registered to '{community_leader.community_name}': containing {len(community_leader.community_members)} members" 
         }
 #-------------------------------------------------------------------------------------------
+#create a household emergency report that will be pushed immediately to all households, and to community leader for validation 
 class EmergencyReportRegistrationRequest(BaseModel):
     id: int
     title: str = Field(min_length=1)
     location: str = Field(min_length=1)
     description: str = Field(min_length=1)
-
-#we are going to need to do a lot of checks for this one >:(      
+     
 @router.post("/household/emergency-report")
 def send_emergency_report_to_db(data: EmergencyReportRegistrationRequest):
     with get_session() as session:
@@ -183,7 +185,7 @@ def send_emergency_report_to_db(data: EmergencyReportRegistrationRequest):
         }
 
 #-------------------------------------------------------------------------------------
-
+#generic route that can request any required data for a UI refresh 
 class HouseholdRefreshPageRequest(BaseModel):
     id: int
 

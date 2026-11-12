@@ -1,13 +1,11 @@
 import os
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 from app import models
 
 DATABASE_URL = None
 engine = None
 SessionLocal = None
-
 
 # create url that the app will use to connect to the db, then create the engine
 def connect_to_db():
@@ -50,13 +48,13 @@ def connect_to_db():
     models.Base.metadata.create_all(engine)
 
 
-# this is called by table classes when they do db fn's
+# this is called by by many scripts, when db operations are required 
 def get_session():
     if not engine:
         raise RuntimeError("Engine not created before session started")
     return SessionLocal()
 
-
+#another way to get the db
 def get_db():
     session = SessionLocal()
     try:
@@ -64,11 +62,12 @@ def get_db():
     finally:
         session.close()
 
+#we need to do this if there is logic that is wiping tables that need to be remade 
 def recreate_all_tables():
     models.Base.metadata.create_all(bind=engine)
     print("Recreated all tables")
 
-#delete the actual tables
+#delete the actual tables (not just flush the data)
 #delete all tables except system_settings
 def delete_all_tables():
     try:

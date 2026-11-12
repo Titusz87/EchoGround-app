@@ -1,5 +1,4 @@
 from app.services.create_records import create_person
-import app.services.db_helpers as db
 import math
 from app.database import get_session
 from app import models
@@ -8,9 +7,13 @@ import random
 from datetime import datetime, timezone
 from app.services import incident_sync 
 
+#for creating test incidents. Collected by observing real dataquoll incidents. 
 event_types = ['bushfire', 'medical', 'flood', 'earthquake', 'vehicle_accident', 'storm']
 warning_levels = ['advice', 'none', 'watch_and_act']
 
+#-----------------------------------------------------------------------------------
+
+#create multiple people for testing with random coords within Aus
 def create_fake_people(amount):
     ids = []
     for i in range(amount):
@@ -21,8 +24,9 @@ def create_fake_people(amount):
     print(f"Created {i+1} test people with random locations in Aus")
     return ids
 
+#use the temporary_incidents table to make fake/test incidents
+#the reason for this is a table has to be used to make the ORM objects
 def create_fake_incident(_latitude, _longitude):   
-    #make some fake incidents with the base ORM class
     incident = models.Temporary_Incident(
         id = get_next_fake_id(),
         event_type = random.choice(event_types),
@@ -35,11 +39,11 @@ def create_fake_incident(_latitude, _longitude):
     )
     return incident
 
+#create multiple incidents
 def create_fake_incidents(person_id, amount):
     if amount < 1:
         print("Cannot create less than 1 test incident")
         return
-    
     with get_session() as session:
         
         #check if person exists in db and retrieve their lat/lon
@@ -50,18 +54,18 @@ def create_fake_incidents(person_id, amount):
             return "latitude/longitude of person is not set"
 
         #create fake incidents with random locations and append them to list
-        radius = system_settings.get("notify_within_radius")
+        radius = system_settings.get("notify_within_radius") #incidents are with the area of concern, so that people can 'subscribe' to them
         fake_incidents = []
         for _ in range(amount):
             latitude, longitude = random_location_within_radius(person.latitude, person.longitude, radius)
             incident = create_fake_incident(latitude, longitude)
             fake_incidents.append(incident)
 
-    #now sync the database with the new fake incidents
+    #now sync the database with the new fake incidents (temporary_incidents ORM objects)
     incident_sync.update_database_incidents(fake_incidents, fake_incidents=True)
     return [incident.id for incident in fake_incidents]
     
-#AI generated math 
+#the math used for the location calculations 
 def random_location_within_radius(latitude: float, longitude: float, radius_km: float) -> tuple[float, float]:
     earth_radius_km = 6371.0
     #Maximum angular distance in radians
@@ -86,7 +90,7 @@ def random_location_within_radius(latitude: float, longitude: float, radius_km: 
  
 #----------------------------helpers-------------------------------------
 
-#get the available number of fake incident. then increase it by 1 for the next use
+#get the count of fake incidents from system settings. then increase it by 1 for the next use
 def get_next_fake_id():
     test_incident_count = system_settings.get("test_incident_count")
     system_settings.set("test_incident_count", test_incident_count + 1)

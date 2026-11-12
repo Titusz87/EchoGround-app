@@ -1,6 +1,11 @@
 import math
 from geopy.distance import geodesic
 
+#NOTE: this script is depreciated and not used in any builds
+#it still exists in the source code because it was a fun exercise
+#this code does execute without errors, however it is MUCH slower than the python 'BallTree' library
+
+#quadtree can be created with 2 classes: the quadtree itself, and a generic 'point' class
 class Quadtree:
     
     #bounds is a dictionary with lat and long coords
