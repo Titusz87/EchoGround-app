@@ -1,13 +1,9 @@
-from sqlalchemy import select, inspect, delete
-from app.database import get_session
-from app.database import engine
+from sqlalchemy import select, delete
 from app.models import Base
-from app import models
 
 #-------config-------------------------------------
 
 verbose_debug = False
-
 
 #----------helpers-------------------------------------
 #convert incidents between our python class and table class after polling
@@ -54,7 +50,7 @@ def delete_db_rows(session, rows):
     except Exception as e:
         print(f"Failed to delete rows from db: {e}")
 
-#reading is the opposite process 
+#return all rows as ORM objects 
 def get_all_rows(session, model):
     try:
         result = session.execute(select(model))
@@ -106,6 +102,7 @@ def flush_db_table(session, model):
         print(message)
         return message
 
+#delete the content of all tables except 'system_settings' which the program depends on to run
 def flush_all_tables(session):
     try:
         for table in reversed(Base.metadata.sorted_tables):
@@ -116,7 +113,6 @@ def flush_all_tables(session):
         print("Wiped all data from all tables")
     except Exception as e:
         print(f"Failed to wipe data from all tables: {e}")
-
 
 #return any wanted info about tables for debugging
 def print_table_info(session, model):
@@ -142,7 +138,7 @@ def get_column(session, model, field):
     column = getattr(model, field)
     return session.execute(select(column)).scalars().all()
 
-#i seem to be doing this a lot
+#shorthand for simple SQLalchemy code, if required 
 def get_row(session, model, id):
     row = session.get(model, id)
     if row is None:

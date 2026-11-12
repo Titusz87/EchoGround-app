@@ -1,30 +1,26 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from app.services.create_records import create_person
 from app.database import get_session
 from app import models
 from app.services.login import verify_person_creds
 from datetime import datetime
-# Commented out for local integration validation tests
-# from app.services.firebase import verify_app_check
 
 router = APIRouter()
 
 #--------------------------------------------------------------------------------
-
-#defines json input from front end
+#pydantic request allows json to be inputted into the functions inside the routes 
 class StartupRequest(BaseModel):
     latitude: float
     longitude: float
     fcm_token: str
 
-#-------------------------------------------------------------------------
-
 #this is the route that runs ONCE when a device connects for the first time (to give the device a unique id and save fcm token in the backend)
 @router.post("/person/create")  #changed from /create-person to /person/create to match the frontend request path
 def register_person(data: StartupRequest):
     
-    # FIXED: Passed as ordered positional arguments to eliminate parameter naming conflicts
+    #pass in the default values to create a person (which acts like a device in the db schema)
+    #fcm token can be null but the device won't receive push notifications through firebase  
     person_id = create_person(
         data.latitude,
         data.longitude,
@@ -45,10 +41,11 @@ class LocationUpdateRequest(BaseModel):
     longitude: float
     id: int
     fcm_token: str
-#the PATCH that updates location of a person 
+
 @router.patch("/person/update-location")
 def update_location(data: LocationUpdateRequest):
-    
+
+    #check person is valid before updating location
     status = verify_person_creds(data.id, data.fcm_token)
     if status is True:
         with get_session() as session:
@@ -63,28 +60,19 @@ def update_location(data: LocationUpdateRequest):
     
     raise HTTPException(status_code=401, detail=status)
     
-   
 #----------------------------------------------------------------------------------
 
-
-
-# ADDED: This is the route that runs to grab all active hazards standing near a specific device index block
-# NOTE: this endpoint is used by the frontend dashboard view to fetch and plot 
-# a complete live list of nearby active hazards on the map screen canvas 
-# (useful because firebase push alerts only handle one-time temporary events
-
+#get all the incidents that a person is 'subscribed' to, by using the 'people_incidents' table 
 @router.get("/person/{person_id}/incidents")
 def get_nearby_incidents_for_person(person_id: int):
     with get_session() as session:
         
-        #look up the person's pre-calculated proximity subscription row mapping coordinates
+        #check person exists in both tables
         row = session.query(models.People_Incident).filter(models.People_Incident.id == person_id).first()
-        
-        #throw standard web error tracking status layers if workspace node id fails lookup check
         if not row:
             raise HTTPException(status_code=404, detail="Person ID workspace index node not found")
             
-        #if they have no active incidents nearby, return an empty array gracefully to client
+        #if they have no active incidents nearby, return an empty array 
         if not row.incident_ids:
             return {
                 "status": "ok", 
@@ -93,12 +81,10 @@ def get_nearby_incidents_for_person(person_id: int):
                 "incidents": []
             }
             
-        #extract the detailed data records from current_incidents using those matched spatial map IDs
-        nearby_incidents = session.query(models.Current_Incident).filter(
-            models.Current_Incident.id.in_(row.incident_ids)
-        ).all()
+        #extract the detailed data records from current_incidents 
+        nearby_incidents = session.query(models.Current_Incident).filter(models.Current_Incident.id.in_(row.incident_ids)).all()
         
-        #serialize the database rows into a clean, readable JSON dictionary array context
+        #return readable JSON dict
         incidents_list = []
         for inc in nearby_incidents:
             incidents_list.append({
@@ -124,6 +110,7 @@ def get_nearby_incidents_for_person(person_id: int):
         }
 
 #---------------------------------------------------------------------------------------------------
+#the fcm tokens automatically update, so this behavior needs to be handled with a route
 class TokenChangeRequest(BaseModel):
     id: int
     new_token: str
@@ -136,9 +123,9 @@ def update_a_users_fcm_token(data: TokenChangeRequest):
         row = session.get(models.People, data.id)
         if row is None:
             raise HTTPException(status_code=404, detail="id not found in database")
-
         row.fcm_token = data.new_token
         session.commit()
+        
         return {
             "status": "ok", 
             "message": "fcm token successfully changed"

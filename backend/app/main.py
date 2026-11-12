@@ -10,21 +10,18 @@ from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.services.betterstack_log import setup_betterstack
 from app.services.poll_dataquoll import poll_all_states, setup_polling
-from app.services.incident_sync import custom_quadtree
 from app.services.firebase import initialise_firebase, firebase_test_notification
 from app.database import connect_to_db, get_session, recreate_all_tables, delete_all_tables
 from app.routers.person import router as person_router
 from app.routers.system_testing import router as system_testing_router
 from app.routers.household import router as household_router
 from app.routers.community_leader import router as community_leader
-from app.services import db_helpers as db
-from app import models
-from app.services.create_fake_data import create_fake_people
 from app.services import system_settings as system_settings
 
 
 #--------------Better Stack logging---------------------------------  
 
+#do this first to have backend logs available in the cloud
 setup_betterstack()                                                   
 
 #-----------------------------------------------------
@@ -33,7 +30,7 @@ setup_betterstack()
 #'asynccontextmanager' decorator makes 'lifespan' fn work as a context manager  
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    #one time setup stuff runs here 
+    #NOTE: one time setup stuff runs here. Do all these jobs in the right order  
     load_dotenv(".env")
     firebase_app = initialise_firebase()
     app.state.firebase_app = firebase_app
@@ -97,7 +94,7 @@ app.include_router(community_leader)
 def root():
     return {"message": "Hello from EchoGround!"}
 
-#can do database stuff here
+#can do database jobs here if we want 
 def do_additional_db_jobs():
     with get_session() as session:
 
@@ -105,6 +102,7 @@ def do_additional_db_jobs():
 
         session.commit()
 
+#can do additional firebase jobs (like testing) here if we want 
 def do_additional_firebase_jobs():
     if system_settings.get("test_firebase_notification_system"):
         firebase_test_notification()

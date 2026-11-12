@@ -14,7 +14,7 @@ from app.services import firebase
 router = APIRouter()
 
 #-----------------------------------------------
-#make a community leader
+#create a community leader in the db
 class CommunityLeaderCreationRequest(BaseModel):
     id: int
     #fcm_token: str
@@ -40,7 +40,7 @@ def register_community_leader(data: CommunityLeaderCreationRequest):
         "message": f"Community Leader created successfully with id {data.id} and community name {data.community_name}",
     }
 #---------------------------------------------------------------------
-
+#approve the login of a community leader
 #this fn is identical to the household login version
 @router.post("/community-leader/login")
 def log_into_community_leader(data: LoginRequest):
@@ -51,7 +51,7 @@ def log_into_community_leader(data: LoginRequest):
         raise HTTPException(status_code=401, detail= "phone number and password pair do not match")
 
     #now that login is successful, we can return whatever data we want 
-    #TODO: use the id to retrieve profile data and send it here
+    #we don't need to return anything however, this job will be handled by the 'refresh' routes
    
     return {
         "status": "ok",
@@ -99,7 +99,7 @@ def get_all_incidents_affecting_the_community(data:CommunityLeaderIncidentReques
             }
 
 #---------------------------------------------------------------------------------------------
-#rewrite incident ORM objects to have been validated by a community leader
+#allow the community leader to validate incidents and push notifications to community members
 class CommunityLeaderValidateIncidentRequest(BaseModel):    
     id: int
     validated_incidents: dict[str, str | None] #the validated incidents are {key: incident_id (string), value: notice (string)}. Notice can also be None 
@@ -157,7 +157,7 @@ def update_incidents_to_be_validated_by_community_leader(data: CommunityLeaderVa
             }
 
 #------------------------------------------------------------------------------------------------
-
+#create the community plans that will be pulled from the backend by the UI
 class CommunityLeaderPlanCreationRequest(BaseModel):
     id: int
     body: str
@@ -195,12 +195,11 @@ def create_community_specific_plans(data: CommunityLeaderPlanCreationRequest):
             }
 
 #-------------------------------------------------------------------------------------
-
+#allow the community leader to send publish notifications to all community members 
 class CommunityLeaderPublishNotificationRequest(BaseModel):
     id: int
     body: str
 
-#sends push notifications
 @router.post("/community-leader/publish-notification")
 def send_a_notification_to_all_community_members(data: CommunityLeaderPublishNotificationRequest):
     with get_session() as session:
@@ -230,7 +229,8 @@ def send_a_notification_to_all_community_members(data: CommunityLeaderPublishNot
             "message": f"Sent {sent_count} notifications to community members in '{community_leader.community_name}'"
             }
 
-#--------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------
+#the community leader can validate an emergency report from a household and push notifications to all community members
 class CommunityLeaderReportValidationRequest(BaseModel):
     id: int
     report_id: int
@@ -272,6 +272,7 @@ def validate_an_emergency_report_for_a_community(data: CommunityLeaderReportVali
         }
 
 #-------------------------------------------------------------------------------
+#generic route that can request any required data for a UI refresh 
 class CommunityLeaderRefreshPageRequest(BaseModel):
     id: int
 

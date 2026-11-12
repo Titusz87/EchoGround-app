@@ -49,7 +49,7 @@ class Temporary_Incident(Incident):
 #-------------identifier classes--------------------------------------------------------
 
 #people can be households, community leaders or both. fcm token is for pushing notifications to devices
-#this is a simple setup where people to devices is one-to-one
+#this is a simple setup where people to devices is one-to-one. People are essentially just devices. 
 class People(Base):
     __tablename__ = "people"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -81,7 +81,6 @@ class Household(Base):
 
 
 #------------------profile classes------------------------------------------------------------
-
 #we need to remember which incidents affect which people
 class People_Incident(Base):
     __tablename__ = "people_incidents"
@@ -107,9 +106,11 @@ class Community_Posts(Base):
     community_name: Mapped[str] = mapped_column(String, nullable=False)   #this value for convenience 
     post_type: Mapped[str] =  mapped_column(String, nullable=False)                                               #determine what kind of data it is in the routes 
     data:Mapped[Any] = mapped_column(JSON, default=dict, nullable=False)                                          #flexible data inputs 
-#--------------------system settings/info-----------------------------------------------------
 
-#using this instead of global vars for the programs behavior 
+#--------------------system settings/info-----------------------------------------------------
+#NOTE: using this instead of global vars to control the way the program behaves. 
+#NOTE: Environmental variables would be preferable to this in the long term, because the source code doesn't have to be modified to change them.
+#NOTE: however, this table could still exist and be controlled by an external source. It could be useful if the backend had a CLI. 
 class SystemSettings(Base):
     __tablename__ = "system_settings"
     key: Mapped[str] = mapped_column(String, primary_key=True)
