@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends, Header
 from pydantic import BaseModel
 from app.services import db_helpers as db
 from app.services.create_fake_data import create_fake_people, create_fake_incidents
@@ -10,8 +10,29 @@ from app.services import poll_dataquoll as dataquoll
 import app.services.system_settings as system_settings
 from sqlalchemy import inspect, text
 import json
+import os 
 
-router = APIRouter()
+#------------setup-------------------------------------------------
+
+#this fn is used to protect all of the routes in this script from abuse
+def verify_system_api_key(api_key: str = Header(...)):
+    system_api_key = os.getenv("SYSTEM_API_KEY")
+    #exit early if .env isn't loaded properly
+    if not system_api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="System API key is not configured"
+        )
+    #reject if wrong key is provided
+    if api_key != system_api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+    return True
+
+#NOTE: all of the 'system' routes in this script have a required API key check. the API key is in .env
+router = APIRouter(prefix="/system", dependencies=[Depends(verify_system_api_key)])
 
 #------------------routes for testing the system----------------------------------
 
@@ -69,7 +90,7 @@ def wipe_db_table(table_name: str):
 #--------------------------------------------------------------------------------
 
 #wipe the content of all db tables, excluding 'system_settings' which needs to always exist for the program to run
-#NOTE this is a dangerous route to leave unprotected but fine for the prototype. A lot of 'system' routes could be abused and should not be in a release build  
+#NOTE this is a dangerous route to leave unprotected but fine for the prototype. A lot of 'system' routes could be abused and should not be in a release build, even with API validation  
 @router.delete("/system/erase-all-records")
 def wipe_all_db_records():
     with get_session() as session:
