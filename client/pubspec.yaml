@@ -101,7 +101,7 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_native_splash:
-  color: "#14171A" # Deep charcoal black background
+  color: "#1B2126"
   image: lib/assets/images/app/logo.png
   
   # platform-specific overrides
@@ -110,7 +110,7 @@ flutter_native_splash:
   web: true
 
   android_12:
-    color: "#14171A"
+    color: "#1B2126"
     image: lib/assets/images/app/logo.png
 
 
@@ -118,5 +118,5 @@ flutter_launcher_icons:
   android: true     
   ios: true
   image_path: "lib/assets/images/app/launcher_icon.png"
-  adaptive_icon_background: "#14171A" 
+  adaptive_icon_background: "#1B2126" 
   adaptive_icon_foreground: "lib/assets/images/app/launcher_icon.png"
