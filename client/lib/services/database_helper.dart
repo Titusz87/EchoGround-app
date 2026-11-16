@@ -1,14 +1,21 @@
 import 'package:flutter/foundation.dart' show kIsWeb, ValueNotifier, debugPrint;
-import 'package:sqflite/sqflite.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:path/path.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+/// Manages local persistence for cached incidents and device configuration.
+///
+/// Uses SQLite via FFI on native desktop/mobile platforms and an in-memory
+/// store on Web (`kIsWeb`) so GitHub Pages and iOS Safari PWAs run without
+/// requiring Cross-Origin Isolated WASM workers (`sqflite_sw.js`).
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
-  // Added reactive synchronisation notifier layer for real-time UI triggering
+  // Web-safe in-memory stores used when kIsWeb is true
+  static final Map<String, Map<String, dynamic>> _webNotifications = {};
+  static final Map<String, String> _webConfig = {};
+
+  /// Reactive notifier incremented whenever cached records change.
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
 
   // In-memory cache for coordinates
@@ -18,34 +25,28 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   Future<Database> get database async {
+    if (kIsWeb) {
+      throw UnsupportedError('SQLite Database instance is bypassed on Web.');
+    }
     if (_database != null) return _database!;
     _database = await _initDB('incidents_cache.db');
     return _database!;
   }
 
   Future<Database> _initDB(String filePath) async {
-    if (kIsWeb) {
-      databaseFactory = databaseFactoryFfiWeb;
-      return await openDatabase(
-        filePath,
-        version: 3,
-        onCreate: _createDB,
-        onUpgrade: _upgradeDB,
-      );
-    } else {
-      sqfliteFfiInit();
-      final dbPath = await getDatabasesPath();
-      final path = join(dbPath, filePath);
-      return await openDatabase(
-        path,
-        version: 3,
-        onCreate: _createDB,
-        onUpgrade: _upgradeDB,
-      );
-    }
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
+    return await openDatabase(
+      path,
+      version: 3,
+      onCreate: _createDB,
+      onUpgrade: _upgradeDB,
+    );
   }
 
-  Future _createDB(Database db, int version) async {
+  Future<void> _createDB(Database db, int version) async {
     await db.execute('''
       CREATE TABLE notifications (
         id TEXT PRIMARY KEY,
@@ -76,62 +77,73 @@ class DatabaseHelper {
     ''');
   }
 
-  /// Updates the status value of an incident/report record inside the cache table
-  Future<int> updateNotificationStatus(String id, String status) async {
-    final db = await instance.database;
-    return await db.update(
-      'notifications', // Replace with your exact SQLite notification table name if different
-      {'status': status},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 3) {
       try {
         await db.execute(
-          "ALTER TABLE notifications ADD COLUMN validated_by TEXT;",
+          'ALTER TABLE notifications ADD COLUMN validated_by TEXT;',
         );
       } catch (_) {}
       try {
         await db.execute(
-          "ALTER TABLE notifications ADD COLUMN last_updated TEXT;",
+          'ALTER TABLE notifications ADD COLUMN last_updated TEXT;',
         );
       } catch (_) {}
       try {
         await db.execute(
-          "ALTER TABLE notifications ADD COLUMN test_incident TEXT;",
+          'ALTER TABLE notifications ADD COLUMN test_incident TEXT;',
         );
       } catch (_) {}
     }
   }
 
-  Future<void> insertNotification(Map<String, dynamic> dataPayload) async {
-    // WRAP EVERYTHING IN A TOP-LEVEL TRY BLOCK TO PREVENT METOD DROPS
-    try {
-      final db = await database;
+  /// Updates the status value of an incident/report record inside the cache.
+  Future<int> updateNotificationStatus(String id, String status) async {
+    if (kIsWeb) {
+      final existing = _webNotifications[id];
+      if (existing != null) {
+        existing['status'] = status;
+        syncNotifier.value++;
+        return 1;
+      }
+      return 0;
+    }
 
+    final db = await instance.database;
+    final updated = await db.update(
+      'notifications',
+      {'status': status},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (updated > 0) syncNotifier.value++;
+    return updated;
+  }
+
+  /// Sanitises and inserts or replaces an incident payload in local storage.
+  Future<void> insertNotification(Map<String, dynamic> dataPayload) async {
+    try {
       String? sanitizeString(dynamic value, {String? fallback}) {
         if (value == null) return fallback;
         final str = value.toString().trim();
         return str.isEmpty ? fallback : str;
       }
 
-      // TYPE-SAFE NUMERIC PARSER: Handles strings, doubles, and ints cleanly without crashing
       double? parseCoordinate(dynamic val) {
         if (val == null) return null;
         if (val is num) return val.toDouble();
         return double.tryParse(val.toString().trim());
       }
 
+      final String id = sanitizeString(
+        dataPayload['id'],
+        fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
+      )!;
+
       final Map<String, dynamic> row = {
-        'id': sanitizeString(
-          dataPayload['id'],
-          fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
-        ),
+        'id': id,
         'event_type': sanitizeString(
-          dataPayload['title'],
+          dataPayload['title'] ?? dataPayload['event_type'],
           fallback: 'General Incident',
         ),
         'status': sanitizeString(dataPayload['status'], fallback: 'Active'),
@@ -143,11 +155,8 @@ class DatabaseHelper {
           dataPayload['state'],
           fallback: 'Active Status',
         ),
-
-        // Safely uses the crash-proof parser engine
         'latitude': parseCoordinate(dataPayload['latitude']),
         'longitude': parseCoordinate(dataPayload['longitude']),
-
         'last_evaluated': sanitizeString(
           dataPayload['last_evaluated'],
           fallback: 'Not Evaluated',
@@ -190,33 +199,45 @@ class DatabaseHelper {
         ),
       };
 
-      print(
-        "DATABASE TRACKER: Cleaned row data created successfully for ID: ${row['id']}",
-      );
-      print("Syncing cleaned dataset entry to local database: ${row['id']}");
+      if (kIsWeb) {
+        _webNotifications[id] = row;
+        syncNotifier.value++;
+        return;
+      }
 
+      final db = await database;
       await db.insert(
         'notifications',
         row,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-
-      // ⚡ BROADCAST TO UI MODULES: Force text dashboard layout components to repaint
       syncNotifier.value++;
-      print(
-        "DATABASE SUCCESS: SQLite transaction completed for row ID: ${row['id']}",
-      );
     } catch (methodError) {
-      print("CRITICAL INGESTION CRASH ENCOUNTERED: $methodError");
+      debugPrint('DatabaseHelper.insertNotification error: $methodError');
     }
   }
 
+  /// Returns all cached notifications ordered by creation timestamp descending.
   Future<List<Map<String, dynamic>>> fetchAllNotifications() async {
+    if (kIsWeb) {
+      final list = _webNotifications.values
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      list.sort((a, b) => (b['created'] ?? '').compareTo(a['created'] ?? ''));
+      return list;
+    }
+
     final db = await instance.database;
     return await db.query('notifications', orderBy: 'created DESC');
   }
 
+  /// Saves a key-value configuration pair to local storage.
   Future<void> saveConfig(String key, String value) async {
+    if (kIsWeb) {
+      _webConfig[key] = value;
+      return;
+    }
+
     final db = await instance.database;
     await db.insert('device_config', {
       'key': key,
@@ -224,7 +245,12 @@ class DatabaseHelper {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// Retrieves a stored configuration value by [key], or `null` if absent.
   Future<String?> getConfig(String key) async {
+    if (kIsWeb) {
+      return _webConfig[key];
+    }
+
     final db = await instance.database;
     final maps = await db.query(
       'device_config',
