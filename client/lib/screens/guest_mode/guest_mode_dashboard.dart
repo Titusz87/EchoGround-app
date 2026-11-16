@@ -1,16 +1,22 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
-
-import '../../services/database_helper.dart';
-import '../../widgets/embedded_street_map.dart';
-import '../../widgets/active_incidents_card.dart';
-import '../login_page.dart';
-
 import 'package:maplibre_gl/maplibre_gl.dart';
 
+import '../../services/database_helper.dart';
+import '../../widgets/active_incidents_card.dart';
+import '../../widgets/embedded_street_map.dart';
+import '../login_page.dart';
+import 'components/guest_action_grid.dart';
+import 'components/guest_active_incidents_banner.dart';
+import 'components/guest_hero_header.dart';
+import 'components/guest_location_footer.dart';
+import 'components/guest_location_service.dart';
+import 'components/guest_map_incident_bubble.dart';
+import 'components/guest_theme.dart';
+
+/// Main dashboard screen for unauthenticated Guest Mode users.
+///
+/// Coordinates device geolocation lookups, observes cached incident records
+/// from SQLite, and switches between the overview screen and full-screen map.
 class GuestModeDashboard extends StatefulWidget {
   const GuestModeDashboard({super.key});
 
@@ -19,13 +25,22 @@ class GuestModeDashboard extends StatefulWidget {
 }
 
 class _GuestModeDashboardState extends State<GuestModeDashboard> {
-  int _bottomIndex = 0;
-  final GlobalKey _mapKey = GlobalKey();
+  static const int _homeNavIndex = 0;
+  static const int _profileNavIndex = 1;
 
-  static const _nativeLandKey = String.fromEnvironment('NATIVE_LAND_KEY');
+  /// Persists acknowledged incident IDs across map navigation and logout transitions.
+  static final Set<String> _acknowledgedIncidentIds = <String>{};
+
+  final GlobalKey _mapKey = GlobalKey();
+  final GuestLocationService _locationService = GuestLocationService();
+
+  List<String> _currentIncidentIds = const [];
+  bool _isMapOpen = false;
   LatLng? _deviceLocation;
-  String _locationLabel = 'Finding your location…';
-  bool _locating = false;
+  String _localityLabel = 'Finding your location…';
+  String _territoryLabel = '';
+  bool _isLocating = false;
+  Map<String, dynamic>? _selectedMapIncident;
 
   @override
   void initState() {
@@ -33,275 +48,308 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
     _refreshLocation();
   }
 
+  /// Resolves device coordinates, locality name, and First Nations territory.
   Future<void> _refreshLocation() async {
-    if (_locating) return;
+    if (_isLocating) return;
+
     setState(() {
-      _locating = true;
-      _locationLabel = 'Finding your location…';
+      _isLocating = true;
+      _localityLabel = 'Finding your location…';
+      _territoryLabel = '';
     });
+
+    final result = await _locationService.fetchLocationDetails();
+    if (!mounted) return;
+
+    setState(() {
+      _deviceLocation = result.coordinates;
+      _localityLabel = result.locality;
+      _territoryLabel = result.territory;
+      _isLocating = false;
+    });
+  }
+
+  /// Fetches official active incidents from SQLite, excluding announcements
+  /// and unvalidated community reports so counts match [ActiveIncidentsCard].
+  Future<List<Map<String, dynamic>>> _loadIncidents() async {
     try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (mounted) {
-          setState(() {
-            _deviceLocation = null;
-            _locationLabel = 'Location permission is off. Enable it and tap to retry.';
-          });
-        }
-        return;
-      }
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.low,
-          timeLimit: Duration(seconds: 12),
-        ),
-      );
-      if (!mounted) return;
-      final coordinates = LatLng(position.latitude, position.longitude);
+      final rawNotifications = await DatabaseHelper.instance
+          .fetchAllNotifications();
+
+      return rawNotifications.where((item) {
+        final id = item['id']?.toString() ?? '';
+        final rawType = item['event_type'] ?? item['type'] ?? '';
+        final normalizedType = rawType.toString().toLowerCase();
+
+        return !id.startsWith('unknown_incident') &&
+            !id.contains('community_report') &&
+            !normalizedType.contains('announcement');
+      }).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Opens a draggable bottom sheet containing the full incident list and marks
+  /// all currently active incidents as acknowledged.
+  void _openActiveIncidentsSheet() {
+    if (!mounted) return;
+    setState(() {
+      _acknowledgedIncidentIds.addAll(_currentIncidentIds);
+    });
+
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss active incidents',
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+              child: Material(
+                color: GuestTheme.surfaceCard,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: const BorderSide(color: GuestTheme.border, width: 1),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 400,
+                    maxHeight: 440,
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
+                    child: const ActiveIncidentsCard(showCardChrome: false),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (_, animation, __, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.35),
+            end: Offset.zero,
+          ).animate(curvedAnimation),
+          child: FadeTransition(opacity: curvedAnimation, child: child),
+        );
+      },
+    );
+  }
+
+  /// Handles bottom navigation selection between Home and Profile.
+  void _onNavigationTabSelected(int index) {
+    if (index == _profileNavIndex) {
+      Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => const LoginPage()));
+      return;
+    }
+
+    if (index == _homeNavIndex) {
       setState(() {
-        _deviceLocation = coordinates;
-        _locationLabel = 'Finding the place name and First Nations region…';
+        _isMapOpen = false;
+        _selectedMapIncident = null;
       });
-      final labels = await Future.wait([
-        _lookupLocality(coordinates),
-        _lookupTerritories(coordinates),
-      ]);
-      if (!mounted) return;
-      final locality = labels[0];
-      final territories = labels[1];
-      setState(() {
-        _locationLabel = [
-          if (locality.isNotEmpty) locality,
-          if (territories.isNotEmpty)
-            territories
-          else
-            'First Nations region unavailable',
-        ].join(' · ');
-      });
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _deviceLocation = null;
-          _locationLabel = 'Location unavailable. Tap to retry.';
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _locating = false);
-    }
-  }
-
-  Future<String> _lookupLocality(LatLng point) async {
-    try {
-      final response = await http.get(Uri.https(
-        'api.bigdatacloud.net',
-        '/data/reverse-geocode-client',
-        {
-          'latitude': '${point.latitude}',
-          'longitude': '${point.longitude}',
-          'localityLanguage': 'en',
-        },
-      )).timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return '';
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final city = data['city']?.toString().trim() ?? '';
-      final locality = city.isNotEmpty
-          ? city
-          : data['locality']?.toString().trim() ?? '';
-      final state = data['principalSubdivision']?.toString().trim() ?? '';
-      return {locality, state}.where((value) => value.isNotEmpty).join(', ');
-    } catch (_) {
-      return '';
-    }
-  }
-
-  Future<String> _lookupTerritories(LatLng point) async {
-    if (_nativeLandKey.trim().isEmpty) return '';
-    try {
-      final response = await http.get(Uri.https(
-        'native-land.ca',
-        '/api/index.php',
-        {
-          'maps': 'territories',
-          'position': '${point.latitude},${point.longitude}',
-          'key': _nativeLandKey.trim(),
-        },
-      )).timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return '';
-      final payload = jsonDecode(response.body);
-      final features = payload is Map ? payload['features'] : payload;
-      if (features is! List) return '';
-      final names = <String>{};
-      for (final feature in features.whereType<Map>()) {
-        final properties = feature['properties'];
-        if (properties is! Map) continue;
-        final name = (properties['Name'] ?? properties['name'])
-            ?.toString().trim() ?? '';
-        if (name.isNotEmpty) names.add(name);
-      }
-      return names.join(', ');
-    } catch (_) {
-      return '';
-    }
-  }
-
-  // Loads the active incidents from local SQLite matching tracking layouts
-  Future<List<Map<String, dynamic>>> _loadMapIncidents() async {
-    try {
-      return await DatabaseHelper.instance.fetchAllNotifications();
-    } catch (_) {
-      return [];
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final double mapHeight = _bottomIndex == 0 ? 260.0 : 440.0;
-
-    // Calculates total height of the fixed header section (Map + Titles + Padding)
-    final double fixedHeaderHeight = mapHeight + 132.0;
-
     return Scaffold(
-      backgroundColor: const Color(0xFF14171A),
-      body: Stack(
-        children: [
-          // LAYER 1: The Independent Scrolling Component Panel (Built first so it sits behind)
-          Positioned.fill(
+      backgroundColor: GuestTheme.background,
+      body: _isMapOpen
+          ? _buildFullScreenMapView()
+          : SafeArea(child: _buildHomeView()),
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  /// Builds the scrollable Guest Mode overview layout anchored above the bottom bar.
+  Widget _buildHomeView() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
             child: SingleChildScrollView(
-              // Top padding ensures the cards start rendering exactly beneath your fixed header block
-              padding: EdgeInsets.only(
-                top: fixedHeaderHeight + 16.0,
-                left: 16.0,
-                right: 16.0,
-                bottom: 24.0,
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [ActiveIncidentsCard()],
-              ),
-            ),
-          ),
-
-          // LAYER 2: The Fixed Header Section (Built second with solid background to hide items sliding under)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: fixedHeaderHeight,
-            child: Container(
-              color: const Color(
-                0xFF14171A,
-              ), // Matches your theme to hide background card overflow elements
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Fixed Aspect Map Window Frame
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: mapHeight,
-                      maxHeight: mapHeight,
-                    ),
-                    child: ValueListenableBuilder<int>(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: (constraints.maxHeight - 52).clamp(
+                    0.0,
+                    double.infinity,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const GuestHeroHeader(),
+                    const SizedBox(height: 22),
+                    ValueListenableBuilder<int>(
                       valueListenable: DatabaseHelper.instance.syncNotifier,
-                      builder: (context, syncCount, child) {
+                      builder: (_, _, _) {
                         return FutureBuilder<List<Map<String, dynamic>>>(
-                          future: _loadMapIncidents(),
-                          builder: (context, snapshot) {
-                            final incidentList = snapshot.data ?? [];
+                          future: _loadIncidents(),
+                          builder: (_, snapshot) {
+                            final List<Map<String, dynamic>> incidents =
+                                snapshot.hasError
+                                ? const []
+                                : (snapshot.data ?? const []);
+                            final int incidentCount = incidents.length;
 
-                            return RepaintBoundary(
-                              child: EmbeddedStreetMap(
-                                key: _mapKey,
-                                dynamicCenter: _deviceLocation,
-                                incidentMarkers: incidentList,
-                                initialZoom: 10.0,
-                                height: mapHeight,
-                              ),
+                            final List<String> activeIds = incidents
+                                .map((item) => item['id']?.toString() ?? '')
+                                .where((id) => id.isNotEmpty)
+                                .toList();
+                            _currentIncidentIds = activeIds;
+
+                            final bool hasUnseenIncidents = activeIds.any(
+                              (id) => !_acknowledgedIncidentIds.contains(id),
+                            );
+
+                            return GuestActiveIncidentsBanner(
+                              activeCount: incidentCount,
+                              showRunningBorder: hasUnseenIncidents,
+                              onTap: _openActiveIncidentsSheet,
                             );
                           },
                         );
                       },
                     ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  const Text(
-                    'Guest Mode',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                    const SizedBox(height: 18),
+                    GuestActionGrid(
+                      onMapTap: () => setState(() => _isMapOpen = true),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: InkWell(
-                      onTap: _locating ? null : _refreshLocation,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.location_on,
-                              color: Color(0xFF4DB6AC), size: 16),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              _locationLabel,
-                              textAlign: TextAlign.center,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: Colors.white60, fontSize: 13),
-                            ),
-                          ),
-                        ],
-                      ),
+                    const SizedBox(height: 16),
+                    GuestLocationFooter(
+                      localityText: _localityLabel,
+                      territoryText: _territoryLabel,
+                      isLoading: _isLocating,
+                      onTap: _refreshLocation,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ],
-      ),
-      bottomNavigationBar: _buildBottomNav(),
+        );
+      },
     );
   }
 
-  Widget _buildBottomNav() {
-    return NavigationBar(
-      selectedIndex: _bottomIndex > 1 ? 0 : _bottomIndex,
-      onDestinationSelected: (index) {
-        if (index == 2) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginPage()),
-          );
-        } else {
-          setState(() => _bottomIndex = index);
-        }
+  /// Builds the full-screen map view with an interactive incident preview card.
+  Widget _buildFullScreenMapView() {
+    return ValueListenableBuilder<int>(
+      valueListenable: DatabaseHelper.instance.syncNotifier,
+      builder: (_, _, _) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: _loadIncidents(),
+          builder: (_, snapshot) {
+            final List<Map<String, dynamic>> incidentList = snapshot.hasError
+                ? const []
+                : (snapshot.data ?? const []);
+
+            return LayoutBuilder(
+              builder: (_, constraints) {
+                final double safeHeight = constraints.maxHeight > 0
+                    ? constraints.maxHeight
+                    : 400.0;
+
+                return Stack(
+                  children: [
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      height: safeHeight,
+                      child: EmbeddedStreetMap(
+                        key: _mapKey,
+                        dynamicCenter: _deviceLocation,
+                        incidentMarkers: incidentList,
+                        initialZoom: 10.0,
+                        height: safeHeight,
+                        onIncidentSelected: (incident) {
+                          setState(() => _selectedMapIncident = incident);
+                        },
+                      ),
+                    ),
+                    if (_selectedMapIncident != null)
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 16,
+                        child: GuestMapIncidentBubble(
+                          incident: _selectedMapIncident!,
+                          onClose: () =>
+                              setState(() => _selectedMapIncident = null),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        );
       },
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home),
-          label: 'Home',
+    );
+  }
+
+  /// Builds the bottom navigation bar.
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: GuestTheme.navBackground,
+        border: Border(top: BorderSide(color: GuestTheme.border, width: 1)),
+      ),
+      child: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          backgroundColor: GuestTheme.navBackground,
+          indicatorColor: Colors.transparent,
+          height: 68,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final isSelected = states.contains(WidgetState.selected);
+            return TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              color: isSelected ? GuestTheme.accentCyan : GuestTheme.textMuted,
+            );
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            final isSelected = states.contains(WidgetState.selected);
+            return IconThemeData(
+              color: isSelected ? GuestTheme.accentCyan : GuestTheme.textMuted,
+              size: 24,
+            );
+          }),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.map_outlined),
-          selectedIcon: Icon(Icons.map),
-          label: 'Map',
+        child: NavigationBar(
+          selectedIndex: _homeNavIndex,
+          onDestinationSelected: _onNavigationTabSelected,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Home',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.account_circle_outlined),
+              selectedIcon: Icon(Icons.account_circle_rounded),
+              label: 'Profile',
+            ),
+          ],
         ),
-        NavigationDestination(
-          icon: Icon(Icons.account_circle_outlined),
-          selectedIcon: Icon(Icons.account_circle),
-          label: 'Profile',
-        ),
-      ],
+      ),
     );
   }
 }

@@ -4,20 +4,26 @@ import '../services/database_helper.dart';
 import 'incident_tile.dart';
 
 class ActiveIncidentsCard extends StatelessWidget {
-  const ActiveIncidentsCard({super.key});
+  final bool showCardChrome;
+
+  const ActiveIncidentsCard({super.key, this.showCardChrome = true});
 
   @override
   Widget build(BuildContext context) {
     const Color cardBackground = Color(0xFF14171A);
-    const Color mintGreenAccent = Color(0xFF4DB6AC);
+    const Color mintGreenAccent = Color(0xFF01AC97);
 
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10, width: 1),
-      ),
+      padding: showCardChrome
+          ? const EdgeInsets.all(16)
+          : const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: showCardChrome
+          ? BoxDecoration(
+              color: cardBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white10, width: 1),
+            )
+          : null,
       child: ValueListenableBuilder<int>(
         valueListenable: DatabaseHelper.instance.syncNotifier,
         builder: (context, syncCount, _) {
@@ -45,18 +51,22 @@ class ActiveIncidentsCard extends StatelessWidget {
                     !id.contains('community_report');
               }).toList();
 
+              final Color headerWarningColor = incidents.isNotEmpty
+                  ? const Color(0xFFF5C518)
+                  : const Color(0xFF4F5D66);
+
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
                       Icon(
                         Icons.warning_amber_rounded,
-                        color: Colors.orange,
+                        color: headerWarningColor,
                         size: 20,
                       ),
-                      SizedBox(width: 8),
-                      Text(
+                      const SizedBox(width: 8),
+                      const Text(
                         'ACTIVE INCIDENTS',
                         style: TextStyle(
                           color: Colors.white,
@@ -67,6 +77,7 @@ class ActiveIncidentsCard extends StatelessWidget {
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 4),
                   Text(
                     '${incidents.length} active incidents',
