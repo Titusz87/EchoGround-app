@@ -159,7 +159,7 @@ class NotificationService {
               // Force fire the system listener notifier to paint the text marquee bar across screens
               DatabaseHelper.instance.syncNotifier.value++;
               print(
-                "🎯 ANNOUNCEMENT FILTER ENGAGED: Wiped out report card duplicate and updated banner keys to: $incomingBody",
+                "ANNOUNCEMENT FILTER ENGAGED: Wiped out report card duplicate and updated banner keys to: $incomingBody",
               );
             }
 
@@ -188,10 +188,9 @@ class NotificationService {
               // Checks if the row ID matches or encapsulates the backend digits string slice
               if (currentId == targetNumericId ||
                   currentId.contains(targetNumericId)) {
-                final db = await DatabaseHelper.instance.database;
-                await db.execute(
-                  "UPDATE notifications SET status = 'validated' WHERE id = ?",
-                  [currentId],
+                await DatabaseHelper.instance.updateNotificationStatus(
+                  currentId,
+                  'validated',
                 );
 
                 // Fire the listenable notifier system to paint the green chip overlays on the Household view

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'services/notification_service.dart';
 import 'screens/guest_mode/guest_mode_dashboard.dart';
@@ -12,8 +13,9 @@ import 'services/web_listener_stub.dart'
 
 void initializeNotificationDatabaseSync() async {
   // Enforces data connection locks cleanly right at boot time
-  await DatabaseHelper.instance.database;
-
+  if (!kIsWeb) {
+    await DatabaseHelper.instance.database;
+  }
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
     try {
       if (message.data != null) {
