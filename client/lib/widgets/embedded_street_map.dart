@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
@@ -21,19 +20,24 @@ class MapStyles {
       'https://tiles.openfreemap.org/styles/positron';
 }
 
+/// Interactive MapLibre street map displaying the user's current position
+/// and clickable orange incident markers.
 class EmbeddedStreetMap extends StatefulWidget {
   final double height;
   final LatLng? dynamicCenter;
   final double initialZoom;
-
   final List<Map<String, dynamic>> incidentMarkers;
+
+  /// Optional callback invoked when the user taps an incident marker on the map.
+  final ValueChanged<Map<String, dynamic>>? onIncidentSelected;
 
   const EmbeddedStreetMap({
     super.key,
     this.height = 260.0,
     this.dynamicCenter,
-    this.initialZoom = 12.0, // Regional 5-10km view
+    this.initialZoom = 12.0,
     this.incidentMarkers = const [],
+    this.onIncidentSelected,
   });
 
   @override
@@ -45,9 +49,15 @@ class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
 
   MapLibreMapController? _mapController;
   Circle? _locationDot;
-  final List<Circle> _activeIncidentCircles =
-      []; // Tracks drew incident markers to prevent screen leaks
+  final List<Circle> _activeIncidentCircles = [];
+  final Map<String, Map<String, dynamic>> _circleIncidentLookup = {};
   bool _styleLoaded = false;
+
+  @override
+  void dispose() {
+    _mapController?.onCircleTapped.remove(_handleCircleTapped);
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant EmbeddedStreetMap oldWidget) {
@@ -57,9 +67,20 @@ class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
       _mapController?.animateCamera(CameraUpdate.newLatLng(newCenter));
       _updateLocationDot(newCenter);
     }
-    // 🎯 RE-TRIGGER LOOP: Automatically updates incident points when database changes
+
     if (_styleLoaded && widget.incidentMarkers != oldWidget.incidentMarkers) {
       _drawIncidentMarkers();
+    }
+  }
+
+  /// Resolves a tapped MapLibre [Circle] back to its incident map and notifies listeners.
+  void _handleCircleTapped(Circle circle) {
+    final callback = widget.onIncidentSelected;
+    if (callback == null) return;
+
+    final incident = _circleIncidentLookup[circle.id];
+    if (incident != null) {
+      callback(incident);
     }
   }
 
@@ -89,47 +110,50 @@ class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
     }
   }
 
-  // NEW INCIDENT DRAW ENGINE: Loops database items and paints orange alert bounds
+  /// Clears previous incident circles and renders updated markers with tap lookup bindings.
   Future<void> _drawIncidentMarkers() async {
     final controller = _mapController;
     if (controller == null || !_styleLoaded) return;
 
     try {
-      // 1. Wipe out any older circles from the screen canvas
       for (final circle in _activeIncidentCircles) {
         await controller.removeCircle(circle);
       }
       _activeIncidentCircles.clear();
+      _circleIncidentLookup.clear();
 
-      // 2. Loop active records and draw them
       for (final incident in widget.incidentMarkers) {
-        final double? lat = incident['latitude'] is num
-            ? (incident['latitude'] as num).toDouble()
-            : double.tryParse(incident['latitude']?.toString() ?? '');
-        final double? lng = incident['longitude'] is num
-            ? (incident['longitude'] as num).toDouble()
-            : double.tryParse(incident['longitude']?.toString() ?? '');
+        final double? lat = _parseCoordinate(incident['latitude']);
+        final double? lng = _parseCoordinate(incident['longitude']);
 
-        if (lat != null && lng != null) {
+        if (lat != null &&
+            lng != null &&
+            lat >= -90.0 &&
+            lat <= 90.0 &&
+            lng >= -180.0 &&
+            lng <= 180.0) {
           final circle = await controller.addCircle(
             CircleOptions(
               geometry: LatLng(lat, lng),
-              circleRadius: 10,
-              circleColor: '#FF9800', // Warning vibrant orange color matching your UI theme
+              circleRadius: 11,
+              circleColor: '#FF9800',
               circleStrokeColor: '#14171A',
               circleStrokeWidth: 1.5,
-              circleOpacity: 0.85,
+              circleOpacity: 0.90,
             ),
           );
           _activeIncidentCircles.add(circle);
+          _circleIncidentLookup[circle.id] = incident;
         }
       }
-      debugPrint(
-        'MAP ENGINE: Successfully rendered ${_activeIncidentCircles.length} incident markers on style map.',
-      );
     } catch (e) {
       debugPrint('Error placing incident markers: $e');
     }
+  }
+
+  double? _parseCoordinate(dynamic raw) {
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw?.toString() ?? '');
   }
 
   @override
@@ -153,13 +177,13 @@ class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
               styleString: _styleUrl,
               onMapCreated: (MapLibreMapController controller) {
                 _mapController = controller;
+                controller.onCircleTapped.add(_handleCircleTapped);
               },
               onStyleLoadedCallback: () {
                 _styleLoaded = true;
-                debugPrint('Map style loaded.');
                 final current = widget.dynamicCenter;
                 if (current != null) _updateLocationDot(current);
-                _drawIncidentMarkers(); // Initial draw step call
+                _drawIncidentMarkers();
               },
               myLocationEnabled: false,
               trackCameraPosition: true,
@@ -178,7 +202,7 @@ class _EmbeddedStreetMapState extends State<EmbeddedStreetMap> {
           Icon(
             Icons.public_rounded,
             size: 54,
-            color: const Color(0xFF4DB6AC).withOpacity(0.65),
+            color: const Color(0xFF4DB6AC).withValues(alpha: 0.65),
           ),
           const SizedBox(height: 16),
           const Row(
