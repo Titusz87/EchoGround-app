@@ -26,29 +26,27 @@ class GuestLocationFooter extends StatelessWidget {
 
     return Column(
       children: [
-        const Divider(color: GuestTheme.border, thickness: 1, height: 24),
-        const SizedBox(height: 4),
+        const Divider(color: GuestTheme.border, thickness: 1, height: 14),
         InkWell(
           onTap: isLoading ? null : onTap,
           borderRadius: BorderRadius.circular(10),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             child: ConstrainedBox(
-              // Reserves vertical space for two lines so the layout above never shifts
-              constraints: const BoxConstraints(minHeight: 42),
+              constraints: const BoxConstraints(minHeight: 28),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Padding(
-                    padding: EdgeInsets.only(top: 2),
+                    padding: EdgeInsets.only(top: 1),
                     child: Icon(
                       Icons.location_on_rounded,
                       color: GuestTheme.textPrimary,
-                      size: 18,
+                      size: 13.5,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 5),
                   Flexible(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -60,18 +58,18 @@ class GuestLocationFooter extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: GuestTheme.textPrimary,
-                            fontSize: 13.5,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 1),
                         Text(
                           territoryText.trim().isNotEmpty ? territoryText : ' ',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: GuestTheme.textMuted,
-                            fontSize: 13,
+                            fontSize: 10.5,
                           ),
                         ),
                       ],
