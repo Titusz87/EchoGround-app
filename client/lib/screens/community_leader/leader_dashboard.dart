@@ -1,17 +1,36 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../services/database_helper.dart';
+import '../../widgets/embedded_street_map.dart';
 import '../../widgets/planning/community_plan_panel.dart';
+import '../guest_mode/components/guest_location_footer.dart';
+import '../guest_mode/components/guest_location_service.dart';
+import '../guest_mode/components/guest_map_incident_bubble.dart';
 import '../login_page.dart';
-import 'components/leader_stats_header.dart';
 import 'components/active_incidents_section.dart';
+import 'components/leader_broadcast_dialog.dart';
+import 'components/leader_hero_header.dart';
+import 'components/leader_quick_actions_grid.dart';
+import 'components/leader_summary_banner.dart';
+import 'components/leader_theme.dart';
 import 'components/reports_log_section.dart';
 
+/// Active sub-view rendered inside the Community Leader dashboard.
+enum _LeaderViewMode { home, map, plan }
+
+/// Main dashboard screen for authenticated Community Leaders.
+///
+/// Synchronises community telemetry, active incidents, and citizen reports,
+/// while providing quick access to the sector map, emergency plan, and
+/// community-wide broadcast tools.
 class LeaderDashboard extends StatefulWidget {
   final String? communityFallback;
+
   const LeaderDashboard({super.key, this.communityFallback});
 
   @override
@@ -19,9 +38,17 @@ class LeaderDashboard extends StatefulWidget {
 }
 
 class _LeaderDashboardState extends State<LeaderDashboard> {
-  int _bottomIndex = 0;
-  bool _isNetworkLoading = false;
+  static const int _homeNavIndex = 0;
+  static const int _profileNavIndex = 1;
 
+  /// Persists acknowledged incident and report IDs across sub-views and rebuilds.
+  static final Set<String> _acknowledgedIncidentIds = <String>{};
+  static final Set<String> _acknowledgedReportIds = <String>{};
+
+  final GlobalKey _mapKey = GlobalKey();
+  final GuestLocationService _locationService = GuestLocationService();
+
+  _LeaderViewMode _activeView = _LeaderViewMode.home;
   List<Map<String, dynamic>> _liveIncidents = [];
   List<Map<String, dynamic>> _reports = [];
 
@@ -29,32 +56,75 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   String _householdsCount = '1';
   String _membersCount = '1';
 
+  LatLng? _deviceLocation;
+  String _localityLabel = 'Finding your location…';
+  String _territoryLabel = '';
+  bool _isLocating = false;
+
+  Map<String, dynamic>? _selectedMapIncident;
+  bool _isSyncing = false;
+
   @override
   void initState() {
     super.initState();
+    DatabaseHelper.instance.syncNotifier.addListener(_onDatabaseChanged);
     _initializeDashboardState();
+    _refreshLocation();
   }
 
-  /// Recovers persistent community state labels before running data pipes
+  @override
+  void dispose() {
+    DatabaseHelper.instance.syncNotifier.removeListener(_onDatabaseChanged);
+    super.dispose();
+  }
+
+  void _onDatabaseChanged() {
+    _syncLeaderDashboardPipeline();
+  }
+
+  /// Recovers saved community labels and triggers initial telemetry sync.
   Future<void> _initializeDashboardState() async {
     final String savedComm =
         await DatabaseHelper.instance.getConfig('auth_community_name') ??
         await DatabaseHelper.instance.getConfig('community_name') ??
         '';
 
-    if (mounted) {
-      setState(() {
-        if (widget.communityFallback != null &&
-            widget.communityFallback!.trim().isNotEmpty) {
-          _communityName = widget.communityFallback!.trim();
-        } else if (savedComm.trim().isNotEmpty) {
-          _communityName = savedComm.trim();
-        }
-      });
-      _syncLeaderDashboardPipeline();
-    }
+    if (!mounted) return;
+
+    setState(() {
+      if (widget.communityFallback != null &&
+          widget.communityFallback!.trim().isNotEmpty) {
+        _communityName = widget.communityFallback!.trim();
+      } else if (savedComm.trim().isNotEmpty) {
+        _communityName = savedComm.trim();
+      }
+    });
+
+    await _syncLeaderDashboardPipeline();
   }
 
+  /// Resolves device coordinates, locality name, and First Nations territory.
+  Future<void> _refreshLocation() async {
+    if (_isLocating) return;
+
+    setState(() {
+      _isLocating = true;
+      _localityLabel = 'Finding your location…';
+      _territoryLabel = '';
+    });
+
+    final result = await _locationService.fetchLocationDetails();
+    if (!mounted) return;
+
+    setState(() {
+      _deviceLocation = result.coordinates;
+      _localityLabel = result.locality;
+      _territoryLabel = result.territory;
+      _isLocating = false;
+    });
+  }
+
+  /// Sends a POST request against the configured backend URL with local fallback.
   Future<http.Response> _executeAdaptivePost(
     String endpointPath, {
     Object? body,
@@ -66,7 +136,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     ];
 
     http.Response? finalResponse;
-    for (String baseUrl in targetBaseUrls) {
+    for (final baseUrl in targetBaseUrls) {
       try {
         final cleanBaseUrl = baseUrl.endsWith('/')
             ? baseUrl.substring(0, baseUrl.length - 1)
@@ -78,18 +148,23 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
               headers: {'Content-Type': 'application/json'},
               body: json.encode(body ?? {}),
             )
-            .timeout(const Duration(seconds: 4));
+            .timeout(const Duration(seconds: 5));
 
         if (finalResponse.statusCode == 200) {
           return finalResponse;
         }
       } catch (_) {}
     }
+
     if (finalResponse != null) return finalResponse;
-    throw Exception('Adaptive connection routing parameters exhausted.');
+    throw Exception('Backend endpoints unreachable for $endpointPath');
   }
 
+  /// Synchronises community counts, active incidents, and citizen reports.
   Future<void> _syncLeaderDashboardPipeline() async {
+    if (_isSyncing) return;
+    _isSyncing = true;
+
     try {
       final String rawLeaderId =
           await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
@@ -106,11 +181,11 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
 
       final Map<String, int> requestPayload = {'id': parsedLeaderId};
 
-      // Background telemetry sync updates
-      final incidentRes = await _executeAdaptivePost(
+      await _executeAdaptivePost(
         '/community-leader/get-incidents',
         body: requestPayload,
       );
+
       final reportsRes = await _executeAdaptivePost(
         '/community-leader/refresh-dashboard',
         body: requestPayload,
@@ -120,72 +195,63 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
       int membersUpdated = int.tryParse(rawMembers) ?? 1;
 
       if (reportsRes.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(reportsRes.body);
-        householdsUpdated = data['households_count'] ?? householdsUpdated;
-        membersUpdated = data['members_count'] ?? membersUpdated;
+        final decoded = json.decode(reportsRes.body);
+        if (decoded is Map<String, dynamic>) {
+          householdsUpdated = decoded['households_count'] ?? householdsUpdated;
+          membersUpdated = decoded['members_count'] ?? membersUpdated;
+        }
       }
 
-      final List<Map<String, dynamic>> allCachedRecords = await DatabaseHelper
-          .instance
+      final allCachedRecords = await DatabaseHelper.instance
           .fetchAllNotifications();
 
       if (mounted) {
         setState(() {
           _householdsCount = householdsUpdated.toString();
           _membersCount = membersUpdated.toString();
-
-          // FILTER 1: Exclude both reports AND announcements from official incident cards
-          _liveIncidents = allCachedRecords.where((item) {
-            final idStr = item['id']?.toString() ?? '';
-            final typeStr = (item['event_type'] ?? item['type'] ?? '')
-                .toString();
-
-            return !idStr.startsWith('unknown_incident') &&
-                !idStr.contains('community_report') &&
-                !typeStr.contains('Announcement');
-          }).toList();
-
-          // FILTER 2: Populate ONLY authentic user reports, explicitly blocking announcements
-          _reports = allCachedRecords.where((item) {
-            final idStr = item['id']?.toString() ?? '';
-            final typeStr = (item['event_type'] ?? item['type'] ?? '')
-                .toString();
-
-            final bool isReportRow =
-                idStr.startsWith('unknown_incident') ||
-                idStr.contains('community_report');
-            final bool isAnnouncement = typeStr.contains('Announcement');
-
-            return isReportRow && !isAnnouncement;
-          }).toList();
+          _applyCachedRecordFilters(allCachedRecords);
         });
       }
     } catch (e) {
-      debugPrint('Sync Fallback: $e');
-      final List<Map<String, dynamic>> allCachedRecords = await DatabaseHelper
-          .instance
+      debugPrint('Leader dashboard sync fallback: $e');
+      final allCachedRecords = await DatabaseHelper.instance
           .fetchAllNotifications();
+
       if (mounted) {
         setState(() {
-          _liveIncidents = allCachedRecords
-              .where(
-                (item) =>
-                    !(item['id']?.toString().startsWith('unknown_incident') ??
-                        false),
-              )
-              .toList();
-          _reports = allCachedRecords
-              .where(
-                (item) =>
-                    (item['id']?.toString().startsWith('unknown_incident') ??
-                    false),
-              )
-              .toList();
+          _applyCachedRecordFilters(allCachedRecords);
         });
       }
+    } finally {
+      _isSyncing = false;
     }
   }
 
+  /// Splits cached records into official incidents and citizen reports.
+  void _applyCachedRecordFilters(List<Map<String, dynamic>> records) {
+    _liveIncidents = records.where((item) {
+      final idStr = item['id']?.toString() ?? '';
+      final typeStr = (item['event_type'] ?? item['type'] ?? '').toString();
+
+      return !idStr.startsWith('unknown_incident') &&
+          !idStr.contains('community_report') &&
+          !typeStr.contains('Announcement');
+    }).toList();
+
+    _reports = records.where((item) {
+      final idStr = item['id']?.toString() ?? '';
+      final typeStr = (item['event_type'] ?? item['type'] ?? '').toString();
+
+      final bool isReportRow =
+          idStr.startsWith('unknown_incident') ||
+          idStr.contains('community_report');
+      final bool isAnnouncement = typeStr.contains('Announcement');
+
+      return isReportRow && !isAnnouncement;
+    }).toList();
+  }
+
+  /// Validates a citizen report on the backend and updates local storage state.
   Future<void> submitReportValidationAction(
     String targetReportId,
     String broadcastNotice,
@@ -210,7 +276,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
         'http://127.0.0.1:8000',
       ];
 
-      for (String baseUrl in targetBaseUrls) {
+      for (final baseUrl in targetBaseUrls) {
         try {
           final cleanBaseUrl = baseUrl.endsWith('/')
               ? baseUrl.substring(0, baseUrl.length - 1)
@@ -222,21 +288,13 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
                 headers: {'Content-Type': 'application/json'},
                 body: json.encode(validationPayload),
               )
-              .timeout(const Duration(seconds: 4));
+              .timeout(const Duration(seconds: 5));
 
           if (response.statusCode == 200) {
-            // 🎯 FIXED MUTATION HARMONY: Update local memory + modify raw SQLite data fields cleanly
-            final db = await DatabaseHelper.instance.database;
-            await db.execute(
-              "UPDATE notifications SET status = 'validated' WHERE id = ?",
-              [targetReportId],
+            await DatabaseHelper.instance.updateNotificationStatus(
+              targetReportId,
+              'validated',
             );
-            await db.execute(
-              "UPDATE notifications SET is_validated = 1 WHERE id = ?",
-              [targetReportId],
-            );
-
-            // Notify all listenable layouts to repaint simultaneously
             DatabaseHelper.instance.syncNotifier.value++;
             break;
           }
@@ -247,353 +305,371 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     }
   }
 
-  Future<Map<String, String>> _loadCommunityStats() async {
-    return {
-      'name': _communityName,
-      'households': _householdsCount,
-      'members': _membersCount,
-    };
+  /// Dispatches an announcement payload to the backend broadcast endpoint.
+  Future<bool> _dispatchBroadcastMessage(String finalBroadcastMessage) async {
+    try {
+      final String rawLeaderId =
+          await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
+      final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
+
+      final response = await _executeAdaptivePost(
+        '/community-leader/publish-notification',
+        body: {'id': parsedLeaderId, 'body': finalBroadcastMessage},
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Broadcast dispatch error: $e');
+      return false;
+    }
+  }
+
+  /// Opens a compact bottom-up animated modal showing active incidents or reports.
+  void _openAnimatedListModal({
+    required String barrierLabel,
+    required Widget content,
+    VoidCallback? onOpen,
+  }) {
+    if (!mounted) return;
+    onOpen?.call();
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: barrierLabel,
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+              child: Material(
+                color: LeaderTheme.surfaceCard,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: const BorderSide(color: LeaderTheme.border, width: 1),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 420,
+                    maxHeight: 460,
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                    child: content,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return SlideTransition(
+          position: Tween(
+            begin: const Offset(0, 0.35),
+            end: Offset.zero,
+          ).animate(curvedAnimation),
+          child: FadeTransition(opacity: curvedAnimation, child: child),
+        );
+      },
+    );
+  }
+
+  void _openActiveIncidentsModal() {
+    final activeIds = _liveIncidents
+        .map((item) => item['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty);
+
+    _openAnimatedListModal(
+      barrierLabel: 'Dismiss active incidents',
+      onOpen: () => setState(() => _acknowledgedIncidentIds.addAll(activeIds)),
+      content: ActiveIncidentsSection(liveIncidents: _liveIncidents),
+    );
+  }
+
+  void _openCommunityReportsModal() {
+    final activeReportIds = _reports
+        .map((item) => item['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty);
+
+    _openAnimatedListModal(
+      barrierLabel: 'Dismiss community reports',
+      onOpen: () =>
+          setState(() => _acknowledgedReportIds.addAll(activeReportIds)),
+      content: ReportsLogSection(
+        reports: _reports,
+        onValidateReport: (String id, String notice) {
+          submitReportValidationAction(id, notice);
+        },
+      ),
+    );
+  }
+
+  void _openBroadcastDialog() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          LeaderBroadcastDialog(onSendBroadcast: _dispatchBroadcastMessage),
+    );
+  }
+
+  void _onNavigationTabSelected(int index) {
+    if (index == _profileNavIndex) {
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const LoginPage()));
+
+      return;
+    }
+
+    if (index == _homeNavIndex) {
+      setState(() {
+        _activeView = _LeaderViewMode.home;
+        _selectedMapIncident = null;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF14171A),
-      appBar: AppBar(
-        title: const Text(''),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-      ),
-      body: _isNetworkLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4DB6AC)),
-              ),
-            )
-          : ValueListenableBuilder<int>(
-              // Forces reactive rebuilding on incoming real-time notifications
-              valueListenable: DatabaseHelper.instance.syncNotifier,
-              builder: (context, syncValue, _) {
-                // Auto-refresh data arrays when changes occur
-                _syncLeaderDashboardPipeline();
-
-                return FutureBuilder<Map<String, String>>(
-                  future: _loadCommunityStats(),
-                  builder: (context, snapshot) {
-                    final name = snapshot.data?['name'] ?? _communityName;
-                    final households =
-                        snapshot.data?['households'] ?? _householdsCount;
-                    final members = snapshot.data?['members'] ?? _membersCount;
-
-                    return RefreshIndicator(
-                      onRefresh: _syncLeaderDashboardPipeline,
-                      color: const Color(0xFF4DB6AC),
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            LeaderStatsHeader(
-                              communityName: name,
-                              householdsCount: households,
-                              membersCount: members,
-                            ),
-                            const SizedBox(height: 24),
-                            _buildDynamicBodyContent(),
-                            const SizedBox(height: 24),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+      backgroundColor: LeaderTheme.background,
+      body: _buildBodyForCurrentView(),
       bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  Widget _buildDynamicBodyContent() {
-    if (_bottomIndex == 1) return const CommunityPlanPanel(isLeader: true);
+  Widget _buildBodyForCurrentView() {
+    switch (_activeView) {
+      case _LeaderViewMode.map:
+        return _buildFullScreenMapView();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ActiveIncidentsSection(liveIncidents: _liveIncidents),
-        const SizedBox(height: 16),
-        ReportsLogSection(
-          reports: _reports,
-          onValidateReport: (String id, String notice) {
-            submitReportValidationAction(id, notice);
-          },
-        ),
-      ],
-    );
+      case _LeaderViewMode.plan:
+        return SafeArea(
+          child: RefreshIndicator(
+            onRefresh: _syncLeaderDashboardPipeline,
+            color: LeaderTheme.brandTeal,
+            child: const SingleChildScrollView(
+              physics: AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.all(16),
+              child: CommunityPlanPanel(isLeader: true),
+            ),
+          ),
+        );
+
+      case _LeaderViewMode.home:
+        return SafeArea(child: _buildHomeView());
+    }
   }
 
-  Widget _buildBottomNav() {
-    return NavigationBar(
-      selectedIndex: _bottomIndex > 1 ? 0 : _bottomIndex,
-      onDestinationSelected: (idx) {
-        if (idx == 2) {
-          _showAnnouncementWizard();
-        } else if (idx == 3) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginPage()),
-          );
-        } else {
-          setState(() => _bottomIndex = idx);
-        }
-      },
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home),
-          label: 'Home',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.assignment_outlined),
-          selectedIcon: Icon(Icons.assignment),
-          label: 'Plan',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.add_comment_outlined, color: Color(0xFF4DB6AC)),
-          selectedIcon: Icon(Icons.add_comment, color: Color(0xFF4DB6AC)),
-          label: 'Broadcast',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.account_circle_outlined),
-          selectedIcon: Icon(Icons.account_circle),
-          label: 'Profile',
-        ),
-      ],
+  /// Builds the Community Leader overview layout anchored above the bottom bar.
+  Widget _buildHomeView() {
+    final int incidentCount = _liveIncidents.length;
+    final int reportCount = _reports.length;
+
+    final List activeIncidentIds = _liveIncidents
+        .map((item) => item['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    final List activeReportIds = _reports
+        .map((item) => item['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    final bool hasUnseenIncidents = activeIncidentIds.any(
+      (id) => !_acknowledgedIncidentIds.contains(id),
     );
-  }
 
-  void _showAnnouncementWizard() async {
-    // Local state managers
-    Map<String, String>? selectedLinkedEntity;
-    final textController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
+    final bool hasUnseenReports = activeReportIds.any(
+      (id) => !_acknowledgedReportIds.contains(id),
+    );
 
-    List<Map<String, String>> dropdownOptions = [];
-    bool isDropdownLoading = true;
+    final String incidentSubtitle = incidentCount == 1
+        ? '1 active incident'
+        : '$incidentCount active incidents';
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          // BACKGROUND WORKER: Pulls live cached records the millisecond the sheet opens on screen
-          if (isDropdownLoading) {
-            () async {
-              try {
-                final List<Map<String, dynamic>> allCachedRecords =
-                    await DatabaseHelper.instance.fetchAllNotifications();
-                final List<Map<String, String>> populatedOptions = [];
+    final String reportSubtitle = reportCount == 1
+        ? '1 community report'
+        : '$reportCount community reports';
 
-                for (var item in allCachedRecords) {
-                  final String currentId = item['id']?.toString() ?? '';
-                  final String rawType =
-                      (item['event_type'] ?? item['type'] ?? '').toString();
-                  final String rawTitle =
-                      (item['title'] ?? item['description'] ?? 'Alert')
-                          .toString();
-
-                  // Format descriptive visual anchors to match your precise "incident-title" or "report-title" requirement
-                  if (currentId.startsWith('unknown_incident') ||
-                      currentId.contains('community_report')) {
-                    // It's a citizen-submitted report: map its localized title text parameters
-                    populatedOptions.add({
-                      'id': currentId,
-                      'display': 'REPORT - ${rawTitle.toUpperCase()}',
-                    });
-                  } else {
-                    // It's an official verified community incident: map its event category type fields
-                    populatedOptions.add({
-                      'id': currentId,
-                      'display': 'INCIDENT - ${rawType.toUpperCase()}',
-                    });
-                  }
-                }
-
-                setModalState(() {
-                  dropdownOptions = populatedOptions;
-                  isDropdownLoading = false;
-                });
-              } catch (e) {
-                debugPrint(
-                  'Failed to populate live wizard option dropdown maps: $e',
-                );
-                setModalState(() => isDropdownLoading = false);
-              }
-            }();
-          }
-
-          /// BROADCAST ROUTINE DISPATCHER
-          Future<void> dispatchLiveBroadcastNotification() async {
-            if (!formKey.currentState!.validate()) return;
-
-            final String rawLeaderId =
-                await DatabaseHelper.instance.getConfig('auth_leader_id') ??
-                '1';
-            final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
-
-            // Build the string text message body. Include the linked entity identifier if one was selected
-            String finalBroadcastMessage = textController.text.trim();
-            if (selectedLinkedEntity != null) {
-              finalBroadcastMessage +=
-                  '\n\n[Linked Context: ${selectedLinkedEntity!['display']}]';
-            }
-
-            // SWAGGER BLUEPRINT ALIGNED SCHEMA PAYLOAD MODEL
-            final Map<String, dynamic> broadcastPayload = {
-              'id': parsedLeaderId,
-              'body': finalBroadcastMessage,
-            };
-
-            try {
-              // Dispatch clean post request payload out to live server address nodes
-              final response = await _executeAdaptivePost(
-                '/community-leader/publish-notification',
-                body: broadcastPayload,
-              );
-
-              if (response.statusCode == 200) {
-                if (context.mounted) Navigator.pop(context);
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Announcement broadcast sent via FCM successfully.',
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return RefreshIndicator(
+          onRefresh: _syncLeaderDashboardPipeline,
+          color: LeaderTheme.brandTeal,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: (constraints.maxHeight - 20).clamp(
+                      0.0,
+                      double.infinity,
                     ),
-                    backgroundColor: Colors.teal,
                   ),
-                );
-              }
-            } catch (err) {
-              debugPrint('FCM Notification dispatch error failure: $err');
-            }
-          }
-
-          return AlertDialog(
-            backgroundColor: const Color(0xFF1E2225),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text(
-              'Publish Community Broadcast',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            content: SizedBox(
-              width: 460,
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // DYNAMIC RENDERING DROPDOWN SELECTION WINDOW
-                    isDropdownLoading
-                        ? const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12.0),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Color(0xFF4DB6AC),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Loading list options...',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : DropdownButtonFormField<Map<String, String>>(
-                            value: selectedLinkedEntity,
-                            isExpanded: true,
-                            dropdownColor: const Color(0xFF14171A),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
-                            decoration: const InputDecoration(
-                              labelText: 'Target Incident Link (Optional)',
-                              labelStyle: TextStyle(color: Colors.white60),
-                              border: OutlineInputBorder(),
-                            ),
-                            items: dropdownOptions.map((
-                              Map<String, String> option,
-                            ) {
-                              return DropdownMenuItem<Map<String, String>>(
-                                value: option,
-                                child: Text(
-                                  option['display']!,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (v) =>
-                                setModalState(() => selectedLinkedEntity = v),
-                          ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: textController,
-                      maxLines: 4,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                      decoration: const InputDecoration(
-                        hintText: 'Type announcement message...',
-                        hintStyle: TextStyle(color: Colors.white38),
-                        border: OutlineInputBorder(),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LeaderHeroHeader(
+                        communityName: _communityName,
+                        householdsCount: _householdsCount,
+                        membersCount: _membersCount,
                       ),
-                      validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Announcement body text details required.'
-                          : null,
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      LeaderSummaryBanner(
+                        title: 'Active Incidents',
+                        subtitle: incidentSubtitle,
+                        icon: Icons.warning_amber_rounded,
+                        activeIconColor: LeaderTheme.warningAmber,
+                        hasItems: incidentCount > 0,
+                        showRunningBorder: hasUnseenIncidents,
+                        showIconGlow: true,
+                        beamPhaseOffset: 0.0,
+                        onTap: _openActiveIncidentsModal,
+                      ),
+                      const SizedBox(height: 8),
+                      LeaderSummaryBanner(
+                        title: 'Community Reports',
+                        subtitle: reportSubtitle,
+                        icon: Icons.assignment_turned_in_outlined,
+                        activeIconColor: LeaderTheme.reportBlue,
+                        hasItems: reportCount > 0,
+                        showRunningBorder: hasUnseenReports,
+                        showIconGlow: true,
+                        beamPhaseOffset: 0.5,
+                        onTap: _openCommunityReportsModal,
+                      ),
+                      const SizedBox(height: 12),
+                      LeaderQuickActionsGrid(
+                        onMapTap: () =>
+                            setState(() => _activeView = _LeaderViewMode.map),
+                        onPlanTap: () =>
+                            setState(() => _activeView = _LeaderViewMode.plan),
+                        onBroadcastTap: _openBroadcastDialog,
+                      ),
+                      const SizedBox(height: 6),
+                      GuestLocationFooter(
+                        localityText: _localityLabel,
+                        territoryText: _territoryLabel,
+                        isLoading: _isLocating,
+                        onTap: _refreshLocation,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(color: Colors.white38),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Builds the edge-to-edge map view displaying active incidents and reports.
+  Widget _buildFullScreenMapView() {
+    final List<Map<String, dynamic>> allMarkers = [
+      ..._liveIncidents,
+      ..._reports,
+    ];
+
+    return LayoutBuilder(
+      builder: (_, constraints) {
+        final double safeHeight = constraints.maxHeight > 0
+            ? constraints.maxHeight
+            : 400.0;
+
+        return Stack(
+          children: [
+            SizedBox(
+              width: constraints.maxWidth,
+              height: safeHeight,
+              child: EmbeddedStreetMap(
+                key: _mapKey,
+                dynamicCenter: _deviceLocation,
+                incidentMarkers: allMarkers,
+                initialZoom: 10.0,
+                height: safeHeight,
+                onIncidentSelected: (incident) {
+                  setState(() => _selectedMapIncident = incident);
+                },
+              ),
+            ),
+            if (_selectedMapIncident != null)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 16,
+                child: GuestMapIncidentBubble(
+                  incident: _selectedMapIncident!,
+                  onClose: () => setState(() => _selectedMapIncident = null),
                 ),
               ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4DB6AC),
-                  foregroundColor: const Color(0xFF14171A),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                onPressed: dispatchLiveBroadcastNotification,
-                child: const Text(
-                  'Send Broadcast',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          );
-        },
+          ],
+        );
+      },
+    );
+  }
+
+  /// Builds the two-tab bottom navigation bar (Home and Profile).
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: LeaderTheme.navBackground,
+        border: Border(top: BorderSide(color: LeaderTheme.border, width: 1)),
+      ),
+      child: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          backgroundColor: LeaderTheme.navBackground,
+          indicatorColor: Colors.transparent,
+          height: 68,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final isSelected = states.contains(WidgetState.selected);
+            return TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              color: isSelected ? LeaderTheme.brandTeal : LeaderTheme.textMuted,
+            );
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            final isSelected = states.contains(WidgetState.selected);
+            return IconThemeData(
+              color: isSelected ? LeaderTheme.brandTeal : LeaderTheme.textMuted,
+              size: 24,
+            );
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: _homeNavIndex,
+          onDestinationSelected: _onNavigationTabSelected,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Home',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.account_circle_outlined),
+              selectedIcon: Icon(Icons.account_circle_rounded),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }
