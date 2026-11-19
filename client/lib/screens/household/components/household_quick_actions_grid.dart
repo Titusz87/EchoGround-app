@@ -72,17 +72,18 @@ class HouseholdQuickActionsGrid extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Padding(
-          padding: EdgeInsets.only(left: 2, bottom: 8),
+          padding: EdgeInsets.only(left: 2, bottom: 6),
           child: Text(
             'Quick Actions',
             style: TextStyle(
-              fontSize: 13.5,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
               color: HouseholdTheme.textSecondary,
               letterSpacing: -0.1,
             ),
           ),
         ),
+        const SizedBox(height: 6),
         Row(
           children: [
             Expanded(
@@ -168,11 +169,11 @@ class _HouseholdActionTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Ink(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 22),
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isDisabled
                   ? HouseholdTheme.border.withValues(alpha: 0.55)

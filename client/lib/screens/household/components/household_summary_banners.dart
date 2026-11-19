@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 
 import 'household_theme.dart';
 
-/// Active Incidents card with an optional inline latest-incident preview row
-/// featuring a dedicated [View] pill button, amber icon glow, and perimeter sweep.
+/// Active Incidents card featuring an animated slide-down inline preview
+/// for the latest incident, a dedicated [View] pill button, amber icon glow,
+/// and a rotating perimeter light sweep for unseen alerts.
 class HouseholdActiveIncidentsCard extends StatefulWidget {
   final int activeCount;
   final Map<String, dynamic>? latestIncident;
@@ -37,6 +38,7 @@ class _HouseholdActiveIncidentsCardState
   @override
   void initState() {
     super.initState();
+
     _borderController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3400),
@@ -67,6 +69,8 @@ class _HouseholdActiveIncidentsCardState
   @override
   Widget build(BuildContext context) {
     final bool hasItems = widget.activeCount > 0;
+    final bool showPreview = hasItems && widget.latestIncident != null;
+
     final String subtitle = widget.activeCount == 1
         ? '1 active incident'
         : '${widget.activeCount} active incidents';
@@ -88,161 +92,192 @@ class _HouseholdActiveIncidentsCardState
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.onCardTap,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             child: Ink(
               decoration: BoxDecoration(
                 color: HouseholdTheme.surfaceCard,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: HouseholdTheme.border, width: 1),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Stack(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 9,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  boxShadow: hasItems
-                                      ? [
-                                          BoxShadow(
-                                            color: HouseholdTheme.warningAmber
-                                                .withValues(alpha: 0.16),
-                                            blurRadius: 10,
-                                            spreadRadius: 0,
-                                          ),
-                                        ]
-                                      : null,
-                                ),
-                                child: Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: hasItems
-                                      ? HouseholdTheme.warningAmber
-                                      : HouseholdTheme.iconDisabled,
-                                  size: 32,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Active Incidents',
-                                      style: TextStyle(
-                                        fontSize: 15.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: HouseholdTheme.textSecondary,
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: hasItems
+                                  ? [
+                                      BoxShadow(
+                                        color: HouseholdTheme.warningAmber
+                                            .withValues(alpha: 0.16),
+                                        blurRadius: 10,
+                                        spreadRadius: 0,
                                       ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      subtitle,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: HouseholdTheme.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                color: HouseholdTheme.brandTeal,
-                                size: 24,
-                              ),
-                            ],
-                          ),
-
-                          // Inline latest incident preview with View pill button
-                          if (hasItems && widget.latestIncident != null) ...[
-                            const Divider(
-                              color: HouseholdTheme.border,
-                              height: 18,
-                              thickness: 1,
+                                    ]
+                                  : null,
                             ),
-                            Row(
+                            child: Icon(
+                              Icons.warning_amber_rounded,
+                              color: hasItems
+                                  ? HouseholdTheme.warningAmber
+                                  : HouseholdTheme.iconDisabled,
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(
-                                  Icons.radar_rounded,
-                                  color: HouseholdTheme.brandTeal,
-                                  size: 24,
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        latestTitle,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 13.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: HouseholdTheme.textSecondary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 1),
-                                      Text(
-                                        latestDesc,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 11.5,
-                                          color: HouseholdTheme.textMuted,
-                                        ),
-                                      ),
-                                    ],
+                                const Text(
+                                  'Active Incidents',
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: HouseholdTheme.textSecondary,
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: HouseholdTheme.brandTeal,
-                                    side: const BorderSide(
-                                      color: HouseholdTheme.brandTeal,
-                                      width: 1.2,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 6,
-                                    ),
-                                    minimumSize: const Size(0, 30),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  onPressed:
-                                      widget.onViewLatestTap ??
-                                      widget.onCardTap,
-                                  child: const Text(
-                                    'View',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  subtitle,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: HouseholdTheme.textSecondary,
                                   ),
                                 ),
                               ],
                             ),
-                          ],
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: HouseholdTheme.brandTeal,
+                            size: 22,
+                          ),
                         ],
                       ),
-                    ),
-                  ],
+
+                      // Smooth slide-down expansion when an active incident arrives.
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 360),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 280),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (child, animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, -0.15),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: showPreview
+                              ? Column(
+                                  key: ValueKey(
+                                    'incident_preview_${widget.latestIncident?['id'] ?? latestTitle}',
+                                  ),
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Divider(
+                                      color: HouseholdTheme.border,
+                                      height: 12,
+                                      thickness: 1,
+                                    ),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.radar_rounded,
+                                          color: HouseholdTheme.brandTeal,
+                                          size: 22,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                latestTitle,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: HouseholdTheme
+                                                      .textSecondary,
+                                                ),
+                                              ),
+                                              Text(
+                                                latestDesc,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color:
+                                                      HouseholdTheme.textMuted,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        OutlinedButton(
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor:
+                                                HouseholdTheme.brandTeal,
+                                            side: const BorderSide(
+                                              color: HouseholdTheme.brandTeal,
+                                              width: 1.2,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(9),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 4,
+                                            ),
+                                            minimumSize: const Size(0, 26),
+                                            tapTargetSize: MaterialTapTargetSize
+                                                .shrinkWrap,
+                                          ),
+                                          onPressed:
+                                              widget.onViewLatestTap ??
+                                              widget.onCardTap,
+                                          child: const Text(
+                                            'View',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                )
+                              : const SizedBox.shrink(
+                                  key: ValueKey('incident_preview_empty'),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -258,7 +293,7 @@ class _HouseholdActiveIncidentsCardState
                     painter: _RunningBorderPainter(
                       progress: _borderController.value,
                       accentColor: HouseholdTheme.brandTeal,
-                      borderRadius: 18,
+                      borderRadius: 16,
                     ),
                   );
                 },
@@ -270,8 +305,8 @@ class _HouseholdActiveIncidentsCardState
   }
 }
 
-/// Community Reports Feed summary card with cyan-blue icon glow and an
-/// offset perimeter light sweep for unseen sector reports.
+/// Compact Community Reports Feed summary card with cyan-blue icon glow
+/// and an offset perimeter light sweep for unseen sector reports.
 class HouseholdReportsFeedBanner extends StatefulWidget {
   final int reportCount;
   final bool showRunningBorder;
@@ -298,6 +333,7 @@ class _HouseholdReportsFeedBannerState extends State<HouseholdReportsFeedBanner>
   @override
   void initState() {
     super.initState();
+
     _borderController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3400),
@@ -341,81 +377,78 @@ class _HouseholdReportsFeedBannerState extends State<HouseholdReportsFeedBanner>
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             child: Ink(
               decoration: BoxDecoration(
                 color: HouseholdTheme.surfaceCard,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: HouseholdTheme.border, width: 1),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Stack(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 11,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: hasReports
-                                  ? [
-                                      BoxShadow(
-                                        color: HouseholdTheme.reportBlue
-                                            .withValues(alpha: 0.16),
-                                        blurRadius: 10,
-                                        spreadRadius: 0,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: Icon(
-                              Icons.assignment_turned_in_outlined,
-                              color: hasReports
-                                  ? HouseholdTheme.reportBlue
-                                  : HouseholdTheme.iconDisabled,
-                              size: 30,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Community Reports Feed',
-                                  style: TextStyle(
-                                    fontSize: 15.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: HouseholdTheme.textSecondary,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 9,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: hasReports
+                              ? [
+                                  BoxShadow(
+                                    color: HouseholdTheme.reportBlue.withValues(
+                                      alpha: 0.16,
+                                    ),
+                                    blurRadius: 10,
+                                    spreadRadius: 0,
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  subtitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    color: HouseholdTheme.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            color: HouseholdTheme.brandTeal,
-                            size: 24,
-                          ),
-                        ],
+                                ]
+                              : null,
+                        ),
+                        child: Icon(
+                          Icons.assignment_turned_in_outlined,
+                          color: hasReports
+                              ? HouseholdTheme.reportBlue
+                              : HouseholdTheme.iconDisabled,
+                          size: 26,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Community Reports Feed',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: HouseholdTheme.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: HouseholdTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: HouseholdTheme.brandTeal,
+                        size: 22,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -434,7 +467,7 @@ class _HouseholdReportsFeedBannerState extends State<HouseholdReportsFeedBanner>
                     painter: _RunningBorderPainter(
                       progress: shiftedProgress,
                       accentColor: HouseholdTheme.brandTeal,
-                      borderRadius: 18,
+                      borderRadius: 16,
                     ),
                   );
                 },
@@ -463,6 +496,7 @@ class _RunningBorderPainter extends CustomPainter {
     if (size.width <= 0 || size.height <= 0) return;
 
     final rect = Offset.zero & size;
+
     final rrect = RRect.fromRectAndRadius(
       rect.deflate(0.75),
       Radius.circular(borderRadius),
@@ -492,41 +526,4 @@ class _RunningBorderPainter extends CustomPainter {
     return oldDelegate.progress != progress ||
         oldDelegate.accentColor != accentColor;
   }
-}
-
-/// Paints curved contour lines along the trailing edge of the summary cards.
-class _TopographicLinesPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
-
-    final paint = Paint()
-      ..color = HouseholdTheme.brandTealMuted.withValues(alpha: 0.14)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-
-    for (int i = 0; i < 5; i++) {
-      final double offset = i * 16.0;
-
-      final path = Path()
-        ..moveTo(size.width * 0.25 + offset, 0)
-        ..quadraticBezierTo(
-          size.width * 0.05 + offset,
-          size.height * 0.45,
-          size.width * 0.45 + offset,
-          size.height * 0.65,
-        )
-        ..quadraticBezierTo(
-          size.width * 0.85 + offset,
-          size.height * 0.85,
-          size.width * 0.55 + offset,
-          size.height,
-        );
-
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

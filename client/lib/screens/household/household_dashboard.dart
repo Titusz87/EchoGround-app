@@ -459,15 +459,15 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 460),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: (constraints.maxHeight - 20).clamp(
+                  minHeight: (constraints.maxHeight - 8).clamp(
                     0.0,
                     double.infinity,
                   ),
                 ),
-                child: ValueListenableBuilder(
+                child: ValueListenableBuilder<int>(
                   valueListenable: DatabaseHelper.instance.syncNotifier,
                   builder: (_, _, _) {
                     return FutureBuilder<
@@ -506,15 +506,14 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                             HouseholdHeroHeader(
                               familyLastName: _familyLastName,
                             ),
-                            const SizedBox(height: 10),
-                            FutureBuilder(
+                            const SizedBox(height: 6),
+                            FutureBuilder<String>(
                               future: DatabaseHelper.instance
                                   .getConfig('last_live_announcement')
                                   .then((v) => v ?? _activeAnnouncementText),
                               builder: (_, annSnap) {
                                 final currentAnnouncement =
                                     annSnap.data ?? _activeAnnouncementText;
-
                                 return HouseholdAnnouncementBar(
                                   text: currentAnnouncement,
                                   onTap: () => _showAnnouncementDetails(
@@ -523,7 +522,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                                 );
                               },
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 8),
                             HouseholdActiveIncidentsCard(
                               activeCount: incidents.length,
                               latestIncident: incidents.isNotEmpty
@@ -535,13 +534,13 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                               onViewLatestTap: () =>
                                   _openActiveIncidentsModal(incidents),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             HouseholdReportsFeedBanner(
                               reportCount: reports.length,
                               showRunningBorder: hasUnseenReports,
                               onTap: () => _openCommunityReportsModal(reports),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 8),
                             HouseholdQuickActionsGrid(
                               onMapTap: () => setState(
                                 () => _activeView = _HouseholdViewMode.map,
@@ -552,7 +551,7 @@ class _HouseholdDashboardState extends State<HouseholdDashboard> {
                               ),
                               onReportTap: () => showReportDialog(context),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4),
                             GuestLocationFooter(
                               localityText: _localityLabel,
                               territoryText: _territoryLabel,
