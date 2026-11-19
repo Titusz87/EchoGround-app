@@ -93,13 +93,6 @@ class _LeaderSummaryBannerState extends State<LeaderSummaryBanner>
                 borderRadius: BorderRadius.circular(18),
                 child: Stack(
                   children: [
-                    Positioned(
-                      right: -10,
-                      top: -10,
-                      bottom: -10,
-                      width: 150,
-                      child: CustomPaint(painter: _TopographicLinesPainter()),
-                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 18,
