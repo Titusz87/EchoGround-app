@@ -6,6 +6,7 @@ import 'app_gatekeeper.dart';
 import 'community_leader/leader_dashboard.dart';
 import 'guest_mode/components/guest_theme.dart';
 import 'household/household_dashboard.dart';
+import 'guest_mode/guest_mode_dashboard.dart';
 
 /// Account access screen allowing users to authenticate as a Household member
 /// or Community Leader, or clear the active session back to Guest Mode.
@@ -204,7 +205,7 @@ class LoginPage extends StatelessWidget {
                           Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const AppGatekeeper(),
+                              builder: (context) => const GuestModeDashboard(),
                             ),
                             (route) => false,
                           );

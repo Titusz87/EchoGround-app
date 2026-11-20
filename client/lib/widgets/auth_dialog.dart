@@ -378,12 +378,22 @@ void showLoginDialog(
                               }
                             }
                             if (success) {
+                              await DatabaseHelper.instance.saveConfig(
+                                isLeader
+                                    ? 'auth_leader_id'
+                                    : 'auth_household_id',
+                                parsedId.toString(),
+                              );
                               DatabaseHelper.instance.syncNotifier.value++;
-                              Navigator.of(context).pop();
+                              if (context.mounted) {
+                                Navigator.of(context).pop();
+                              }
                               onAuthSuccess();
                             } else {
                               setState(
-                                () => errorMessage = 'Incorrect phone number or password. Please try again.',
+                                () => errorMessage = isLogin
+                                    ? 'Incorrect phone number or password. Please try again.'
+                                    : 'Could not create account. This phone number may already be registered.',
                               );
                             }
                           },
@@ -405,7 +415,7 @@ void showLoginDialog(
                           isLogin
                               ? "Don't have an account? Sign Up"
                               : "Already have an account? Login",
-                          style: const TextStyle(color: Color(0xFF4DB6AC)),
+                          style: const TextStyle(color: Color(0xFF01AC97)),
                         ),
                       ),
                     ],
