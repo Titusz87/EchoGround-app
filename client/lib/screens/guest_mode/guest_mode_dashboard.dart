@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../services/database_helper.dart';
@@ -15,8 +18,9 @@ import 'components/guest_theme.dart';
 
 /// Main dashboard screen for unauthenticated Guest Mode users.
 ///
-/// Coordinates device geolocation lookups, observes cached incident records
-/// from SQLite, and switches between the overview screen and full-screen map.
+/// Runs a focused three-step startup sequence on initial launch—checking
+/// network connectivity, verifying server reachability, and syncing local
+/// incident records—before smoothly revealing the full dashboard layout.
 class GuestModeDashboard extends StatefulWidget {
   const GuestModeDashboard({super.key});
 
@@ -24,15 +28,28 @@ class GuestModeDashboard extends StatefulWidget {
   State<GuestModeDashboard> createState() => _GuestModeDashboardState();
 }
 
-class _GuestModeDashboardState extends State<GuestModeDashboard> {
+class _GuestModeDashboardState extends State<GuestModeDashboard>
+    with SingleTickerProviderStateMixin {
   static const int _homeNavIndex = 0;
   static const int _profileNavIndex = 1;
 
   /// Persists acknowledged incident IDs across map navigation and logout transitions.
   static final Set<String> _acknowledgedIncidentIds = <String>{};
 
+  /// Tracks whether the initial startup sequence has completed in this session.
+  static bool _hasCompletedStartup = false;
+
   final GlobalKey _mapKey = GlobalKey();
   final GuestLocationService _locationService = GuestLocationService();
+
+  late final AnimationController _revealController;
+  late final Animation<double> _contentOpacity;
+  late final Animation<Offset> _contentSlide;
+
+  bool _isInitializing = !_hasCompletedStartup;
+  String? _startupStatusText = !_hasCompletedStartup
+      ? 'Checking network connection…'
+      : null;
 
   List<String> _currentIncidentIds = const [];
   bool _isMapOpen = false;
@@ -45,7 +62,90 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
   @override
   void initState() {
     super.initState();
+
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+      value: _hasCompletedStartup ? 1.0 : 0.0,
+    );
+
+    final curvedReveal = CurvedAnimation(
+      parent: _revealController,
+      curve: Curves.easeOutCubic,
+    );
+
+    _contentOpacity = curvedReveal;
+    _contentSlide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(curvedReveal);
+
     _refreshLocation();
+
+    if (!_hasCompletedStartup) {
+      _runStartupSequence();
+    }
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    super.dispose();
+  }
+
+  /// Executes the three-stage startup sequence (~5s total) before revealing
+  /// the full Guest Mode dashboard layout.
+  Future<void> _runStartupSequence() async {
+    // Stage 1: Network connectivity check (~1.6s)
+    await Future.delayed(const Duration(milliseconds: 1600));
+    if (!mounted) return;
+
+    // Stage 2: Server reachability check (~1.8s)
+    setState(() => _startupStatusText = 'Connecting to EchoGround server…');
+    await _pingBackendServer(minDisplayMs: 1800);
+    if (!mounted) return;
+
+    // Stage 3: Incident dataset check (~1.6s)
+    setState(() => _startupStatusText = 'Updating incident data…');
+    await _loadIncidents();
+    await Future.delayed(const Duration(milliseconds: 1600));
+    if (!mounted) return;
+
+    _hasCompletedStartup = true;
+    setState(() {
+      _startupStatusText = null;
+      _isInitializing = false;
+    });
+
+    await _revealController.forward();
+  }
+
+  /// Performs a lightweight reachability check against the configured backend.
+  Future<void> _pingBackendServer({int minDisplayMs = 1800}) async {
+    const String injectedBaseUrl = String.fromEnvironment('BACKEND_URL');
+    final List<String> candidates = [
+      if (injectedBaseUrl.isNotEmpty) injectedBaseUrl,
+      'http://127.0.0.1:8000',
+    ];
+
+    final stopwatch = Stopwatch()..start();
+
+    for (final baseUrl in candidates) {
+      try {
+        final cleanUrl = baseUrl.endsWith('/')
+            ? baseUrl.substring(0, baseUrl.length - 1)
+            : baseUrl;
+        await http
+            .get(Uri.parse('$cleanUrl/'))
+            .timeout(const Duration(seconds: 2));
+        break;
+      } catch (_) {}
+    }
+
+    final remainingMs = minDisplayMs - stopwatch.elapsedMilliseconds;
+    if (remainingMs > 0) {
+      await Future.delayed(Duration(milliseconds: remainingMs));
+    }
   }
 
   /// Resolves device coordinates, locality name, and First Nations territory.
@@ -69,8 +169,8 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
     });
   }
 
-  /// Fetches official active incidents from SQLite, excluding announcements
-  /// and unvalidated community reports so counts match [ActiveIncidentsCard].
+  /// Fetches official active incidents from SQLite/Web cache, excluding
+  /// announcements and unvalidated community reports.
   Future<List<Map<String, dynamic>>> _loadIncidents() async {
     try {
       final rawNotifications = await DatabaseHelper.instance
@@ -90,10 +190,10 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
     }
   }
 
-  /// Opens a draggable bottom sheet containing the full incident list and marks
-  /// all currently active incidents as acknowledged.
+  /// Opens a compact bottom-up animated modal displaying the active incident list.
   void _openActiveIncidentsSheet() {
     if (!mounted) return;
+
     setState(() {
       _acknowledgedIncidentIds.addAll(_currentIncidentIds);
     });
@@ -104,7 +204,7 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
       barrierLabel: 'Dismiss active incidents',
       barrierColor: Colors.black.withValues(alpha: 0.28),
       transitionDuration: const Duration(milliseconds: 280),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      pageBuilder: (_, _, _) {
         return SafeArea(
           child: Center(
             child: Padding(
@@ -131,7 +231,7 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
           ),
         );
       },
-      transitionBuilder: (_, animation, __, child) {
+      transitionBuilder: (_, animation, _, child) {
         final curvedAnimation = CurvedAnimation(
           parent: animation,
           curve: Curves.easeOutCubic,
@@ -172,12 +272,24 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
       body: _isMapOpen
           ? _buildFullScreenMapView()
           : SafeArea(child: _buildHomeView()),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: _isInitializing
+          ? null
+          : FadeTransition(opacity: _contentOpacity, child: _buildBottomNav()),
     );
   }
 
-  /// Builds the scrollable Guest Mode overview layout anchored above the bottom bar.
+  /// Builds the centered startup splash state that transitions smoothly into
+  /// the full Guest Mode overview layout.
   Widget _buildHomeView() {
+    if (_isInitializing) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: GuestHeroHeader(statusMessage: _startupStatusText),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         return Center(
@@ -196,49 +308,70 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const GuestHeroHeader(),
+                    GuestHeroHeader(statusMessage: _startupStatusText),
                     const SizedBox(height: 22),
-                    ValueListenableBuilder<int>(
-                      valueListenable: DatabaseHelper.instance.syncNotifier,
-                      builder: (_, _, _) {
-                        return FutureBuilder<List<Map<String, dynamic>>>(
-                          future: _loadIncidents(),
-                          builder: (_, snapshot) {
-                            final List<Map<String, dynamic>> incidents =
-                                snapshot.hasError
-                                ? const []
-                                : (snapshot.data ?? const []);
-                            final int incidentCount = incidents.length;
+                    FadeTransition(
+                      opacity: _contentOpacity,
+                      child: SlideTransition(
+                        position: _contentSlide,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ValueListenableBuilder(
+                              valueListenable:
+                                  DatabaseHelper.instance.syncNotifier,
+                              builder: (_, _, _) {
+                                return FutureBuilder<
+                                  List<Map<String, dynamic>>
+                                >(
+                                  future: _loadIncidents(),
+                                  builder: (_, snapshot) {
+                                    final List<Map<String, dynamic>> incidents =
+                                        snapshot.hasError
+                                        ? const []
+                                        : (snapshot.data ?? const []);
 
-                            final List<String> activeIds = incidents
-                                .map((item) => item['id']?.toString() ?? '')
-                                .where((id) => id.isNotEmpty)
-                                .toList();
-                            _currentIncidentIds = activeIds;
+                                    final int incidentCount = incidents.length;
 
-                            final bool hasUnseenIncidents = activeIds.any(
-                              (id) => !_acknowledgedIncidentIds.contains(id),
-                            );
+                                    final List<String> activeIds = incidents
+                                        .map(
+                                          (item) =>
+                                              item['id']?.toString() ?? '',
+                                        )
+                                        .where((id) => id.isNotEmpty)
+                                        .toList();
 
-                            return GuestActiveIncidentsBanner(
-                              activeCount: incidentCount,
-                              showRunningBorder: hasUnseenIncidents,
-                              onTap: _openActiveIncidentsSheet,
-                            );
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    GuestActionGrid(
-                      onMapTap: () => setState(() => _isMapOpen = true),
-                    ),
-                    const SizedBox(height: 16),
-                    GuestLocationFooter(
-                      localityText: _localityLabel,
-                      territoryText: _territoryLabel,
-                      isLoading: _isLocating,
-                      onTap: _refreshLocation,
+                                    _currentIncidentIds = activeIds;
+
+                                    final bool hasUnseenIncidents = activeIds
+                                        .any(
+                                          (id) => !_acknowledgedIncidentIds
+                                              .contains(id),
+                                        );
+
+                                    return GuestActiveIncidentsBanner(
+                                      activeCount: incidentCount,
+                                      showRunningBorder: hasUnseenIncidents,
+                                      onTap: _openActiveIncidentsSheet,
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 18),
+                            GuestActionGrid(
+                              onMapTap: () => setState(() => _isMapOpen = true),
+                            ),
+                            const SizedBox(height: 16),
+                            GuestLocationFooter(
+                              localityText: _localityLabel,
+                              territoryText: _territoryLabel,
+                              isLoading: _isLocating,
+                              onTap: _refreshLocation,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -252,7 +385,7 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
 
   /// Builds the full-screen map view with an interactive incident preview card.
   Widget _buildFullScreenMapView() {
-    return ValueListenableBuilder<int>(
+    return ValueListenableBuilder(
       valueListenable: DatabaseHelper.instance.syncNotifier,
       builder: (_, _, _) {
         return FutureBuilder<List<Map<String, dynamic>>>(
@@ -319,6 +452,7 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
           height: 68,
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             final isSelected = states.contains(WidgetState.selected);
+
             return TextStyle(
               fontSize: 12,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
@@ -327,6 +461,7 @@ class _GuestModeDashboardState extends State<GuestModeDashboard> {
           }),
           iconTheme: WidgetStateProperty.resolveWith((states) {
             final isSelected = states.contains(WidgetState.selected);
+
             return IconThemeData(
               color: isSelected ? GuestTheme.accentCyan : GuestTheme.textMuted,
               size: 24,

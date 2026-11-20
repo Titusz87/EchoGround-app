@@ -190,7 +190,7 @@ class LoginPage extends StatelessWidget {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
-                                'Session cleared successfully. Reverted to Guest Mode.',
+                                'Logged out successfully. You are now in Guest Mode.',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w500,
