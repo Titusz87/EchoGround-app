@@ -45,20 +45,24 @@ class _LeaderBroadcastDialogState extends State<LeaderBroadcastDialog> {
       for (final item in allCachedRecords) {
         final String currentId = item['id']?.toString() ?? '';
         final String rawType = (item['event_type'] ?? item['type'] ?? '')
-            .toString();
-        final String rawTitle =
-            (item['title'] ?? item['description'] ?? 'Alert').toString();
+            .toString()
+            .trim();
+        final String resolvedLabel = rawType.isNotEmpty
+            ? rawType
+            : (item['title'] ?? item['description'] ?? 'Alert')
+                  .toString()
+                  .trim();
 
         if (currentId.startsWith('unknown_incident') ||
             currentId.contains('community_report')) {
           populatedOptions.add({
             'id': currentId,
-            'display': 'REPORT - ${rawTitle.toUpperCase()}',
+            'display': 'REPORT - ${resolvedLabel.toUpperCase()}',
           });
         } else {
           populatedOptions.add({
             'id': currentId,
-            'display': 'INCIDENT - ${rawType.toUpperCase()}',
+            'display': 'INCIDENT - ${resolvedLabel.toUpperCase()}',
           });
         }
       }

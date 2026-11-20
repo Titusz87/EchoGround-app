@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart' show kIsWeb, ValueNotifier, debugPrint;
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -9,14 +11,15 @@ import 'web_storage_stub.dart'
 ///
 /// Uses SQLite via FFI on native desktop/mobile platforms and browser
 /// `localStorage` + in-memory caching on Web (`kIsWeb`) so GitHub Pages and
-/// iOS Safari PWAs persist sessions across page refreshes.
+/// iOS Safari PWAs persist sessions, incidents, and reports across refreshes.
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
-  // Web-safe in-memory stores used when kIsWeb is true
+  // Web-safe stores backed by browser localStorage when kIsWeb is true
   static final Map<String, Map<String, dynamic>> _webNotifications = {};
   static final Map<String, String> _webConfig = {};
+  static bool _webNotificationsHydrated = false;
 
   /// Reactive notifier incremented whenever cached records change.
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
@@ -26,6 +29,36 @@ class DatabaseHelper {
   double? cachedLng;
 
   DatabaseHelper._init();
+
+  /// Loads persisted web notifications from browser localStorage once per session.
+  void _hydrateWebNotificationsIfNeeded() {
+    if (_webNotificationsHydrated) return;
+    _webNotificationsHydrated = true;
+    try {
+      final rawJson = readWebConfig('cached_notifications_v1');
+      if (rawJson != null && rawJson.trim().isNotEmpty) {
+        final decoded = json.decode(rawJson);
+        if (decoded is Map<String, dynamic>) {
+          decoded.forEach((key, value) {
+            if (value is Map) {
+              _webNotifications[key] = Map<String, dynamic>.from(value);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to hydrate web notifications: $e');
+    }
+  }
+
+  /// Serializes current web notifications back to browser localStorage.
+  void _persistWebNotifications() {
+    try {
+      writeWebConfig('cached_notifications_v1', json.encode(_webNotifications));
+    } catch (e) {
+      debugPrint('Failed to persist web notifications: $e');
+    }
+  }
 
   Future<Database> get database async {
     if (kIsWeb) {
@@ -103,9 +136,11 @@ class DatabaseHelper {
   /// Updates the status value of an incident/report record inside the cache.
   Future<int> updateNotificationStatus(String id, String status) async {
     if (kIsWeb) {
+      _hydrateWebNotificationsIfNeeded();
       final existing = _webNotifications[id];
       if (existing != null) {
         existing['status'] = status;
+        _persistWebNotifications();
         syncNotifier.value++;
         return 1;
       }
@@ -138,9 +173,42 @@ class DatabaseHelper {
         return double.tryParse(val.toString().trim());
       }
 
+      // Intercept broadcast announcements so they update the marquee bar
+      // instead of appearing as a "General Incident" report card.
+      final String rawType =
+          (dataPayload['type'] ?? dataPayload['event_type'] ?? '')
+              .toString()
+              .toLowerCase();
+      final String? announcementText = sanitizeString(
+        dataPayload['Message'] ??
+            dataPayload['announcement'] ??
+            (rawType.contains('announcement')
+                ? (dataPayload['body'] ?? dataPayload['message'])
+                : null),
+      );
+
+      if (rawType.contains('announcement') ||
+          dataPayload.containsKey('Message')) {
+        if (announcementText != null) {
+          await saveConfig('last_live_announcement', announcementText);
+          syncNotifier.value++;
+        }
+        return;
+      }
+
+      final dynamic rawReportId =
+          dataPayload['report_id'] ??
+          dataPayload['report id'] ??
+          dataPayload['incident_id'];
+
+      final String fallbackId =
+          rawReportId != null && rawReportId.toString().trim().isNotEmpty
+          ? 'community_report_${rawReportId.toString().trim()}'
+          : 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}';
+
       final String id = sanitizeString(
         dataPayload['id'],
-        fallback: 'unknown_incident_${DateTime.now().millisecondsSinceEpoch}',
+        fallback: fallbackId,
       )!;
 
       final Map<String, dynamic> row = {
@@ -203,7 +271,9 @@ class DatabaseHelper {
       };
 
       if (kIsWeb) {
+        _hydrateWebNotificationsIfNeeded();
         _webNotifications[id] = row;
+        _persistWebNotifications();
         syncNotifier.value++;
         return;
       }
@@ -223,6 +293,7 @@ class DatabaseHelper {
   /// Returns all cached notifications ordered by creation timestamp descending.
   Future<List<Map<String, dynamic>>> fetchAllNotifications() async {
     if (kIsWeb) {
+      _hydrateWebNotificationsIfNeeded();
       final list = _webNotifications.values
           .map((item) => Map<String, dynamic>.from(item))
           .toList();
@@ -245,11 +316,12 @@ class DatabaseHelper {
     final db = await instance.database;
     await db.insert('device_config', {
       'key': key,
+
       'value': value,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  /// Retrieves a stored configuration value by [key], or `null` if absent.
+  /// Retrieves a stored configuration value by [key], or null if absent.
   Future<String?> getConfig(String key) async {
     if (kIsWeb) {
       final stored = readWebConfig(key);
@@ -259,7 +331,6 @@ class DatabaseHelper {
       }
       return _webConfig[key];
     }
-
     final db = await instance.database;
     final maps = await db.query(
       'device_config',

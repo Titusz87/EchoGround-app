@@ -79,6 +79,11 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
   }
 
   void _onDatabaseChanged() {
+    DatabaseHelper.instance.fetchAllNotifications().then((records) {
+      if (mounted) {
+        setState(() => _applyCachedRecordFilters(records));
+      }
+    });
     _syncLeaderDashboardPipeline();
   }
 
@@ -227,7 +232,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
     }
   }
 
-  /// Splits cached records into official incidents and citizen reports.
+  /// Splits cached records into official incidents and deduplicated citizen reports.
   void _applyCachedRecordFilters(List<Map<String, dynamic>> records) {
     _liveIncidents = records.where((item) {
       final idStr = item['id']?.toString() ?? '';
@@ -238,7 +243,7 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
           !typeStr.contains('Announcement');
     }).toList();
 
-    _reports = records.where((item) {
+    final rawReports = records.where((item) {
       final idStr = item['id']?.toString() ?? '';
       final typeStr = (item['event_type'] ?? item['type'] ?? '').toString();
 
@@ -249,6 +254,43 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
 
       return isReportRow && !isAnnouncement;
     }).toList();
+
+    // Sort server-synced records (community_report_*) ahead of local fallbacks
+    // so deduplication keeps the real backend ID for validation actions.
+    rawReports.sort((a, b) {
+      final aIsServer = (a['id']?.toString() ?? '').contains(
+        'community_report',
+      );
+      final bIsServer = (b['id']?.toString() ?? '').contains(
+        'community_report',
+      );
+      if (aIsServer != bIsServer) return aIsServer ? -1 : 1;
+      return 0;
+    });
+
+    final List<Map<String, dynamic>> uniqueReports = [];
+    final Set<String> seenSignatures = {};
+
+    for (final report in rawReports) {
+      final type = (report['event_type'] ?? report['title'] ?? '')
+          .toString()
+          .toLowerCase()
+          .trim();
+      final desc = (report['description'] ?? '')
+          .toString()
+          .toLowerCase()
+          .trim();
+      final created = (report['created'] ?? '').toString().trim();
+      final timeSig = created.length > 16 ? created.substring(0, 16) : created;
+      final signature = '${type}_${desc}_$timeSig';
+
+      if (!seenSignatures.contains(signature)) {
+        seenSignatures.add(signature);
+        uniqueReports.add(report);
+      }
+    }
+
+    _reports = uniqueReports;
   }
 
   /// Validates a citizen report on the backend and updates local storage state.
@@ -260,13 +302,23 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
         await DatabaseHelper.instance.getConfig('auth_leader_id') ?? '1';
     final int parsedLeaderId = int.tryParse(rawLeaderId.trim()) ?? 1;
     final String numericIdOnly = targetReportId.replaceAll(RegExp(r'\D'), '');
+    final int? parsedIncidentId = int.tryParse(numericIdOnly);
+
+    if (parsedIncidentId == null) {
+      debugPrint(
+        'Validation aborted: no valid numeric ID found in "$targetReportId"',
+      );
+      return;
+    }
+
+    final String resolvedNotice = broadcastNotice.trim().isNotEmpty
+        ? broadcastNotice.trim()
+        : 'Verified by sector community leader.';
 
     final Map<String, dynamic> validationPayload = {
       'id': parsedLeaderId,
-      'validated_incidents': [numericIdOnly],
-      'notice': broadcastNotice.trim().isNotEmpty
-          ? broadcastNotice.trim()
-          : 'Verified by sector community leader.',
+      'validated_incidents': {parsedIncidentId.toString(): resolvedNotice},
+      'notice': resolvedNotice,
     };
 
     try {
@@ -295,8 +347,21 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
               targetReportId,
               'validated',
             );
+            if (mounted) {
+              setState(() {
+                for (final item in _reports) {
+                  if (item['id']?.toString() == targetReportId) {
+                    item['status'] = 'validated';
+                  }
+                }
+              });
+            }
             DatabaseHelper.instance.syncNotifier.value++;
             break;
+          } else {
+            debugPrint(
+              'Validation failed (${response.statusCode}): ${response.body}',
+            );
           }
         } catch (_) {}
       }
@@ -317,7 +382,15 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
         body: {'id': parsedLeaderId, 'body': finalBroadcastMessage},
       );
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        await DatabaseHelper.instance.saveConfig(
+          'last_live_announcement',
+          finalBroadcastMessage.trim(),
+        );
+        DatabaseHelper.instance.syncNotifier.value++;
+        return true;
+      }
+      return false;
     } catch (e) {
       debugPrint('Broadcast dispatch error: $e');
       return false;
@@ -405,10 +478,15 @@ class _LeaderDashboardState extends State<LeaderDashboard> {
       barrierLabel: 'Dismiss community reports',
       onOpen: () =>
           setState(() => _acknowledgedReportIds.addAll(activeReportIds)),
-      content: ReportsLogSection(
-        reports: _reports,
-        onValidateReport: (String id, String notice) {
-          submitReportValidationAction(id, notice);
+      content: ValueListenableBuilder<int>(
+        valueListenable: DatabaseHelper.instance.syncNotifier,
+        builder: (_, _, _) {
+          return ReportsLogSection(
+            reports: _reports,
+            onValidateReport: (String id, String notice) {
+              submitReportValidationAction(id, notice);
+            },
+          );
         },
       ),
     );
