@@ -2,11 +2,14 @@ import 'package:flutter/foundation.dart' show kIsWeb, ValueNotifier, debugPrint;
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'web_storage_stub.dart'
+    if (dart.library.js_interop) 'web_storage_web.dart';
+
 /// Manages local persistence for cached incidents and device configuration.
 ///
-/// Uses SQLite via FFI on native desktop/mobile platforms and an in-memory
-/// store on Web (`kIsWeb`) so GitHub Pages and iOS Safari PWAs run without
-/// requiring Cross-Origin Isolated WASM workers (`sqflite_sw.js`).
+/// Uses SQLite via FFI on native desktop/mobile platforms and browser
+/// `localStorage` + in-memory caching on Web (`kIsWeb`) so GitHub Pages and
+/// iOS Safari PWAs persist sessions across page refreshes.
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
@@ -231,10 +234,11 @@ class DatabaseHelper {
     return await db.query('notifications', orderBy: 'created DESC');
   }
 
-  /// Saves a key-value configuration pair to local storage.
+  /// Saves a key-value configuration pair to persistent local storage.
   Future<void> saveConfig(String key, String value) async {
     if (kIsWeb) {
       _webConfig[key] = value;
+      writeWebConfig(key, value);
       return;
     }
 
@@ -248,6 +252,11 @@ class DatabaseHelper {
   /// Retrieves a stored configuration value by [key], or `null` if absent.
   Future<String?> getConfig(String key) async {
     if (kIsWeb) {
+      final stored = readWebConfig(key);
+      if (stored != null) {
+        _webConfig[key] = stored;
+        return stored;
+      }
       return _webConfig[key];
     }
 

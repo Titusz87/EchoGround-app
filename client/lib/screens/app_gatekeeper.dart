@@ -29,7 +29,7 @@ class _AppGatekeeperState extends State<AppGatekeeper> {
   }
 
   /// Runs the four-stage startup sequence (~8.4s total) and routes to the
-  /// active role dashboard.
+  /// registered role dashboard (or Guest Mode when unauthenticated).
   Future<void> _executeStartupSequence() async {
     // Stage 1: Network & backend reachability check (~2.7s)
     await _pingBackendServer(minDisplayMs: 2700);
@@ -55,33 +55,57 @@ class _AppGatekeeperState extends State<AppGatekeeper> {
     await Future.delayed(const Duration(milliseconds: 2600));
     if (!mounted) return;
 
-    if (leaderId.isNotEmpty) {
-      _navigateWithFade(LeaderDashboard(communityFallback: communityName));
-      return;
-    }
-
-    if (householdId.isNotEmpty) {
-      _navigateWithFade(const HouseholdDashboard());
-      return;
-    }
-
-    // Stage 3: Account lookup result notice (~1.6s)
-    setState(() {
-      _statusMessage = 'No registered account found for this device.';
-    });
-
-    await Future.delayed(const Duration(milliseconds: 1600));
-    if (!mounted) return;
-
-    // Stage 4: Transition to Guest Mode (~1.5s)
-    setState(() {
-      _statusMessage = 'Loading Guest Mode…';
-    });
-
+    // Warm up local incident cache before routing to the target dashboard
     try {
       await DatabaseHelper.instance.fetchAllNotifications();
     } catch (_) {}
 
+    // Route to Community Leader dashboard when a leader session is stored
+    if (leaderId.isNotEmpty) {
+      setState(() {
+        _statusMessage = 'Community Leader account found on this device.';
+      });
+      await Future.delayed(const Duration(milliseconds: 1600));
+      if (!mounted) return;
+
+      setState(() {
+        _statusMessage = 'Loading Community Leader Dashboard…';
+      });
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (!mounted) return;
+
+      _navigateWithFade(LeaderDashboard(communityFallback: communityName));
+      return;
+    }
+
+    // Route to Household dashboard when a household session is stored
+    if (householdId.isNotEmpty) {
+      setState(() {
+        _statusMessage = 'Household account found on this device.';
+      });
+      await Future.delayed(const Duration(milliseconds: 1600));
+      if (!mounted) return;
+
+      setState(() {
+        _statusMessage = 'Loading Household Dashboard…';
+      });
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (!mounted) return;
+
+      _navigateWithFade(const HouseholdDashboard());
+      return;
+    }
+
+    // Fallback: No account registered on this device -> load Guest Mode
+    setState(() {
+      _statusMessage = 'No registered account found for this device.';
+    });
+    await Future.delayed(const Duration(milliseconds: 1600));
+    if (!mounted) return;
+
+    setState(() {
+      _statusMessage = 'Loading Guest Mode…';
+    });
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
 
