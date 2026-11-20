@@ -294,7 +294,7 @@ void showLoginDialog(
                                 isLeader: isLeader,
                               );
                               if (success && isLeader) {
-                                // 🎯 FIXED RECOVERY HANDSHAKE:
+                                // FIXED RECOVERY HANDSHAKE:
                                 // Read the matching mapped name bound specifically to this Person ID inside your local key store!
                                 final String savedMappingKey =
                                     'meta_community_mapping_${parsedId}';
@@ -313,7 +313,7 @@ void showLoginDialog(
                                     recoveredDbName.trim(),
                                   );
                                   print(
-                                    "🎯 IDENTITIES RECOVERY SUCCESS: Restored Postgres target name from local mapping cache: $recoveredDbName",
+                                    "IDENTITIES RECOVERY SUCCESS: Restored Postgres target name from local mapping cache: $recoveredDbName",
                                   );
                                 } else if (cleanCommunity.isNotEmpty) {
                                   await DatabaseHelper.instance.saveConfig(
@@ -353,9 +353,11 @@ void showLoginDialog(
                                     .trim();
                                 final String savedMappingKey =
                                     'meta_community_mapping_${parsedId}';
-                                // 🎯 LOCK IN PERSISTENCE: Maps this custom hardware token ID directly to the registered group value
+                                // LOCK IN PERSISTENCE: Maps this custom hardware token ID directly to the registered group value
                                 await DatabaseHelper.instance.saveConfig(
-                                  isLeader ? 'auth_leader_id' : 'auth_household_id',
+                                  isLeader
+                                      ? 'auth_leader_id'
+                                      : 'auth_household_id',
                                   parsedId.toString(),
                                 );
                                 await DatabaseHelper.instance.saveConfig(
@@ -371,7 +373,7 @@ void showLoginDialog(
                                   stylizedCommName,
                                 );
                                 print(
-                                  "🎯 REGISTRATION LINK SEED: Established local identity map for token: $savedMappingKey -> $stylizedCommName",
+                                  "REGISTRATION LINK SEED: Established local identity map for token: $savedMappingKey -> $stylizedCommName",
                                 );
                               }
                             }
@@ -381,8 +383,7 @@ void showLoginDialog(
                               onAuthSuccess();
                             } else {
                               setState(
-                                () => errorMessage =
-                                    'Authentication sequence tracking failed.',
+                                () => errorMessage = 'Incorrect phone number or password. Please try again.',
                               );
                             }
                           },
