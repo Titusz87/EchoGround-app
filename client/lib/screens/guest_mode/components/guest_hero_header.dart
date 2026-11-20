@@ -2,22 +2,16 @@ import 'package:flutter/material.dart';
 
 import 'guest_theme.dart';
 
-/// Displays the Guest Mode thin-stroke open padlock vector, title, tagline,
-/// and an optional animated startup status line during initial connection checks.
+/// Displays the Guest Mode thin-stroke open padlock vector, title, and tagline.
 class GuestHeroHeader extends StatelessWidget {
-  final String? statusMessage;
-
-  const GuestHeroHeader({super.key, this.statusMessage});
+  const GuestHeroHeader({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final bool isChecking =
-        statusMessage != null && statusMessage!.trim().isNotEmpty;
-
-    return Column(
+    return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(
+        SizedBox(
           width: 56,
           height: 56,
           child: CustomPaint(
@@ -27,8 +21,8 @@ class GuestHeroHeader extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        const Text(
+        SizedBox(height: 10),
+        Text(
           'Guest Mode',
           textAlign: TextAlign.center,
           style: TextStyle(
@@ -38,8 +32,8 @@ class GuestHeroHeader extends StatelessWidget {
             letterSpacing: -0.3,
           ),
         ),
-        const SizedBox(height: 4),
-        const Text(
+        SizedBox(height: 4),
+        Text(
           'Stay informed. Be prepared.',
           textAlign: TextAlign.center,
           style: TextStyle(
@@ -47,66 +41,6 @@ class GuestHeroHeader extends StatelessWidget {
             color: GuestTheme.textSecondary,
             fontWeight: FontWeight.w400,
           ),
-        ),
-        // Smoothly expands during startup checks and collapses once ready
-        AnimatedSize(
-          duration: const Duration(milliseconds: 420),
-          curve: Curves.easeOutCubic,
-          child: isChecking
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 18),
-                  child: SizedBox(
-                    height: 22,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 340),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 0.25),
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Row(
-                        key: ValueKey(statusMessage),
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.8,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                GuestTheme.accentCyan,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 9),
-                          Flexible(
-                            child: Text(
-                              statusMessage!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w500,
-                                color: GuestTheme.accentCyan,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              : const SizedBox.shrink(),
         ),
       ],
     );
