@@ -140,31 +140,30 @@ class NotificationService {
 
           print('Foreground dataset update received and sanitized: $cleanData');
 
-          // 1. ANNOUNCEMENT INTERCEPTOR & FILTER FILTER MODULE
-          final String typeStr = (cleanData['type'] ?? '').toString();
-          if (typeStr.contains('Announcement')) {
-            // Extracts the correct CAPITALIZED key matching backend log payload model
+          // 1. ANNOUNCEMENT INTERCEPTOR & FILTER MODULE
+          final String typeStr = (cleanData['type'] ?? '')
+              .toString()
+              .toLowerCase();
+          if (typeStr.contains('announcement') ||
+              cleanData.containsKey('Message')) {
             final String? incomingBody =
                 cleanData['Message']?.toString() ??
                 cleanData['body']?.toString() ??
-                cleanData['message']?.toString();
+                cleanData['message']?.toString() ??
+                message.notification?.body;
 
-            if (incomingBody != null) {
-              // Permanently persist the clean announcement text message right into  SQLite device configuration keys
+            if (incomingBody != null && incomingBody.trim().isNotEmpty) {
               await DatabaseHelper.instance.saveConfig(
                 'last_live_announcement',
                 incomingBody.trim(),
               );
 
-              // Force fire the system listener notifier to paint the text marquee bar across screens
               DatabaseHelper.instance.syncNotifier.value++;
               print(
-                "ANNOUNCEMENT FILTER ENGAGED: Wiped out report card duplicate and updated banner keys to: $incomingBody",
+                "ANNOUNCEMENT FILTER ENGAGED: Updated banner keys to: ${incomingBody.trim()}",
               );
             }
 
-            // CRITICAL EXIT HANDSHAKE: Aborts the function chain right here so it NEVER drops below
-            // to generate a report tile inside your dashboard data tables layout grid!
             return;
           }
 
